@@ -1,0 +1,19 @@
+name: pegasus_link
+description: Connexion Pegasus (serveur de l'agent et client de l'app) en Dart pur, testée de bout en bout.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.4
+
+resolution: workspace
+
+dependencies:
+  basic_utils: ^5.8.2
+  crypto: ^3.0.8
+  pegasus_protocol:
+    path: ../pegasus_protocol
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

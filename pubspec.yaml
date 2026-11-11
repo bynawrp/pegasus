@@ -10,6 +10,7 @@ workspace:
   - agent
   - packages/pegasus_protocol
   - packages/pegasus_ui
+  - packages/pegasus_link
 
 dev_dependencies:
   lints: ^6.0.0

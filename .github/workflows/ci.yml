@@ -25,14 +25,32 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      - name: Analyse et tous les tests
+        run: bash tool/validate.sh
+
+  windows:
+    name: Agent Windows (tests DPAPI + build)
+    needs: checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
       - run: flutter pub get
-      - run: flutter analyze
-      - name: Tests pegasus_protocol
-        working-directory: packages/pegasus_protocol
-        run: dart test
-      - name: Tests pegasus_ui
-        working-directory: packages/pegasus_ui
+      - name: Tests agent (DPAPI réel)
+        working-directory: agent
         run: flutter test
+      - name: Build agent
+        working-directory: agent
+        run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pegasus-agent-windows
+          path: agent/build/windows/x64/runner/Release
+          retention-days: 7
 
   android:
     name: APK Android (debug)
