@@ -1,6 +1,4 @@
-# rotom
-
-> Like the Pokémon that possesses appliances — your phone possesses your PC.
+# pegasus
 
 Control your PC from a mobile app.
 
