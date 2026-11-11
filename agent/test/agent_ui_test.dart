@@ -112,20 +112,20 @@ void main() {
     for (final size in _sizes) {
       testWidgets('zéro overflow · $name · ${size.width.toInt()}×${size.height.toInt()}', (tester) async {
         await _pump(tester, state, size);
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
         await tester.tap(find.byKey(const ValueKey('nav-devices')));
         await tester.pump();
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
       });
     }
   }
 
   testWidgets('zéro overflow · texte agrandi ×1.3 · fenêtre minimale', (tester) async {
     await _pump(tester, _running(devices: 12, connected: 3), const Size(960, 600), textScale: 1.3);
-    expectNoOverflow(tester);
+    expectCleanLayout(tester);
     await tester.tap(find.byKey(const ValueKey('nav-devices')));
     await tester.pump();
-    expectNoOverflow(tester);
+    expectCleanLayout(tester);
   });
 
   testWidgets('accueil : QR et code manuel affichés', (tester) async {
@@ -161,7 +161,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.chevron_right_rounded));
     await tester.pump();
     expect(find.textContaining('2 / '), findsOneWidget);
-    expectNoOverflow(tester);
+    expectCleanLayout(tester);
   });
 
   testWidgets('révoquer demande confirmation', (tester) async {

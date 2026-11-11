@@ -112,11 +112,16 @@ class LinkState {
 /// Maintient la connexion authentifiée vers un PC associé, avec
 /// reconnexion automatique (spec §5).
 class PegasusLink {
-  PegasusLink({this.appVersion = '0.1.0', Random? random, this.connectTimeout = PegasusClient.connectTimeout})
-      : _random = random ?? Random();
+  PegasusLink({
+    this.appVersion = '0.1.0',
+    Random? random,
+    this.connectTimeout = PegasusClient.connectTimeout,
+    this.pingInterval = PegasusClient.pingInterval,
+  }) : _random = random ?? Random();
 
   final String appVersion;
   final Duration connectTimeout;
+  final Duration pingInterval;
   final Random _random;
   final _states = StreamController<LinkState>.broadcast();
   final _events = StreamController<Envelope>.broadcast();
@@ -163,6 +168,31 @@ class PegasusLink {
     }
   }
 
+  /// Le réseau du téléphone a changé (Wi-Fi coupé / retrouvé) : la connexion
+  /// en cours est probablement morte, on la remplace tout de suite.
+  void networkChanged() {
+    if (_agent == null || _state.needsUserAction) return;
+    if (_state.status == LinkStatus.connecting) return;
+    _attempt = 0;
+    _connect();
+  }
+
+  /// Demande au PC d'oublier cet appareil puis arrête le lien.
+  /// Renvoie `false` si le PC n'a pas pu être prévenu (hors ligne).
+  Future<bool> unpair() async {
+    final c = connection;
+    var notified = false;
+    if (c != null) {
+      _generation++; // La fermeture qui suit ne déclenche pas de reconnexion.
+      try {
+        await c.unpair();
+        notified = true;
+      } catch (_) {}
+    }
+    await stop();
+    return notified;
+  }
+
   Future<Map<String, Object?>> request(String op, [Map<String, Object?> data = const {}]) {
     final c = connection;
     if (c == null) return Future.error(const ConnectionClosedException(null, 'Non connecté'));
@@ -194,6 +224,7 @@ class PegasusLink {
         port: agent.port,
         fingerprint: agent.fingerprint,
         timeout: connectTimeout,
+        ping: pingInterval,
       );
       if (gen != _generation) {
         unawaited(conn.close());

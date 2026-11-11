@@ -184,13 +184,13 @@ class _PauseButton extends ConsumerWidget {
             key: const ValueKey('resume'),
             onPressed: running ? () => controller.setPaused(false) : null,
             icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Reprendre le contrôle'),
+            label: const Text('Reprendre', maxLines: 1),
           )
         : OutlinedButton.icon(
             key: const ValueKey('pause'),
             onPressed: running ? () => controller.setPaused(true) : null,
             icon: const Icon(Icons.pause_rounded),
-            label: const Text('Mettre en pause'),
+            label: const Text('Mettre en pause', maxLines: 1),
           );
   }
 }
