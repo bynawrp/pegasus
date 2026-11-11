@@ -12,10 +12,12 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-
-dev_dependencies:
+  flutter_svg: ^2.3.4
+  # Utilisé par lib/testing.dart (outils de test partagés, jamais importé par les apps).
   flutter_test:
     sdk: flutter
+
+dev_dependencies:
   flutter_lints: ^6.0.0
 
 flutter:
