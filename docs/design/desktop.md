@@ -10,7 +10,7 @@ Maquette interactive (A, B et C) : https://claude.ai/artifact/LMG68poXEUNFT3Nd2C
 
 1. **Zéro overflow** : aucune vue ne défile. Les listes longues sont paginées (journal) ou limitées.
 2. **Toujours actif en arrière-plan** : fermer la fenêtre ne quitte pas Pegasus, l'agent reste dans la zone de notification de la barre des tâches. Quitter se fait explicitement.
-3. **Cohérence avec le mobile** : même palette (fond `#0D1017`, surfaces `#161B24`, accent `#8AB4FF`), mêmes typos (Space Grotesk / Inter), même registre de modules.
+3. **Cohérence avec le mobile** : même DA gaming / néon, mêmes palettes et typos ([da.md](da.md)), même registre de modules.
 
 ## Fenêtre principale
 

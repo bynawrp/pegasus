@@ -15,7 +15,7 @@ class PegasusAgentApp extends StatelessWidget {
     return MaterialApp(
       title: 'Pegasus',
       debugShowCheckedModeBanner: false,
-      theme: PegasusTheme.dark(),
+      theme: PegasusTheme.build(),
       home: const Scaffold(
         body: Center(
           child: Text('Pegasus · agent · protocole v$protocolVersion · port $defaultPort'),
