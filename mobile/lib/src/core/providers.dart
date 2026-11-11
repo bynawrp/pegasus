@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pegasus_link/pegasus_link.dart';
@@ -82,6 +83,12 @@ class PairingNoticeNotifier extends Notifier<String?> {
   void show(String? message) => state = message;
 }
 
+/// Changements de réseau du téléphone (Wi-Fi coupé / retrouvé).
+/// Remplacé par un flux contrôlé dans les tests.
+final networkChangesProvider = Provider<Stream<Object>>(
+  (ref) => Connectivity().onConnectivityChanged.map((r) => r.map((e) => e.name).join(',')),
+);
+
 /// Connexion maintenue vers le PC associé.
 final linkProvider = Provider<PegasusLink>((ref) {
   final link = PegasusLink(appVersion: appVersion);
@@ -106,6 +113,19 @@ class LinkStateNotifier extends Notifier<LinkState> {
       }
     });
     ref.onDispose(sub.cancel);
+
+    // Réseau modifié → la connexion en cours est sans doute morte : on la
+    // remplace tout de suite au lieu d'attendre la détection par ping.
+    Object? lastNetwork;
+    var firstNetwork = true;
+    final net = ref.read(networkChangesProvider).listen((value) {
+      final changed = !firstNetwork && value != lastNetwork;
+      firstNetwork = false;
+      lastNetwork = value;
+      if (changed) link.networkChanged();
+    }, onError: (_) {});
+    ref.onDispose(net.cancel);
+
     ref.listen<AsyncValue<PairedAgent?>>(pairedPcProvider, (prev, next) {
       final pc = next.value;
       final before = prev?.value;
@@ -120,6 +140,19 @@ class LinkStateNotifier extends Notifier<LinkState> {
       }
     }, fireImmediately: true);
     return link.state;
+  }
+
+  /// Oublie le PC : le PC est prévenu (il retire ce téléphone de sa liste),
+  /// puis le secret est supprimé. Renvoie `false` si le PC était injoignable.
+  Future<bool> forgetPc() async {
+    final notified = await ref.read(linkProvider).unpair();
+    if (!notified) {
+      ref.read(pairingNoticeProvider.notifier).show(
+            'Le PC n’a pas pu être prévenu : retirez aussi ce téléphone dans « Appareils » sur le PC.',
+          );
+    }
+    await ref.read(pairedPcProvider.notifier).forget();
+    return notified;
   }
 
   /// Retente tout de suite (retour au premier plan, bouton « Reconnecter »).

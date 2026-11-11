@@ -232,6 +232,8 @@ class AgentController extends Notifier<AgentViewState> {
         }
         state = state.copyWith(devices: devices);
         _persist();
+      case DeviceForgotten(:final device):
+        _addActivity('${device.name} a oublié ce PC');
       case DevicePaired(:final device):
         _addActivity('${device.name} associé');
       case DeviceConnected(:final device):
@@ -239,7 +241,7 @@ class AgentController extends Notifier<AgentViewState> {
             base: state.copyWith(connected: {...state.connected, device.id}));
       case DeviceDisconnected(:final device):
         final still = server.sessions.any((s) => s.device?.id == device.id);
-        if (!still) {
+        if (!still && state.connected.contains(device.id)) {
           _addActivity('${device.name} déconnecté',
               base: state.copyWith(connected: {...state.connected}..remove(device.id)));
         }

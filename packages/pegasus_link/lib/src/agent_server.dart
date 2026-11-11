@@ -31,7 +31,7 @@ class AgentServerConfig {
     this.agentVersion = '0.1.0',
     this.os = 'windows',
     this.handshakeTimeout = const Duration(seconds: 10),
-    this.pingInterval = const Duration(seconds: 15),
+    this.pingInterval = const Duration(seconds: 5),
     this.maxDevices = 5,
     this.maxPendingSockets = 16,
     this.commandsPerSecond = 200,
@@ -71,6 +71,12 @@ class DeviceConnected extends AgentServerEvent {
 
 class DeviceDisconnected extends AgentServerEvent {
   const DeviceDisconnected(this.device);
+  final PairedDevice device;
+}
+
+/// L'appareil a lui-même oublié ce PC (`session.unpair`).
+class DeviceForgotten extends AgentServerEvent {
+  const DeviceForgotten(this.device);
   final PairedDevice device;
 }
 
@@ -411,6 +417,14 @@ class AgentSession {
 
     if (op == 'agent.info') {
       send(Envelope.ok(id, _server.agentInfo()));
+      return;
+    }
+    if (op == 'session.unpair') {
+      // L'app oublie ce PC : l'appareil est retiré de la liste (spec §3).
+      send(Envelope.ok(id));
+      final device = _device!;
+      _server._events.add(DeviceForgotten(device));
+      await _server.revoke(device.id);
       return;
     }
     if (op.startsWith('session.') || op.startsWith('pair.')) {

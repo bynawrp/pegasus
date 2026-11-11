@@ -94,6 +94,13 @@ La connexion TLS est ouverte sans authentification, puis :
 - L'agent stocke le secret chiffré (DPAPI sous Windows) et ajoute l'appareil à la liste des appareils autorisés.
 - La connexion continue ensuite directement avec l'authentification (§4).
 
+### Oubli par l'app
+Quand l'utilisateur choisit « Oublier ce PC », l'app (authentifiée) envoie d'abord :
+```jsonc
+{ "v": 1, "type": "req", "id": "7", "op": "session.unpair", "data": {} }
+```
+L'agent répond `ok`, retire l'appareil de sa liste puis ferme la connexion (`4403`). Toujours accepté, même agent en pause. Si le PC est injoignable, l'app oublie quand même le PC et invite l'utilisateur à retirer l'appareil depuis l'agent.
+
 ## 4. Authentification (chaque connexion)
 
 ```jsonc
@@ -121,16 +128,16 @@ La connexion TLS est ouverte sans authentification, puis :
 
 - Le secret ne transite jamais après l'appairage ; chaque nonce n'est valable qu'une fois.
 - Le handshake doit être terminé en **10 s**, sinon fermeture `4408`.
-- Avant `session.auth` réussi, seules `pair.request`, `session.hello` et `session.auth` sont acceptées.
+- Avant `session.auth` réussi, seules `pair.request`, `session.hello` et `session.auth` sont acceptées ; `session.unpair` exige une session authentifiée.
 - Un même appareil connecté deux fois : l'ancienne connexion est fermée avec `4409`.
 
 ## 5. Connexion maintenue
 
 | Règle | Valeur |
 |---|---|
-| Ping | Trames WebSocket `ping` toutes les **15 s** (des deux côtés) |
-| Déconnexion | Aucune trame reçue pendant **45 s** |
-| Reconnexion (app) | Délai exponentiel 1 s → 2 → 4 → 8 → 16 → **30 s max**, ±20 % d'aléa ; immédiate au retour de l'app au premier plan |
+| Ping | Trames WebSocket `ping` toutes les **5 s** (des deux côtés) |
+| Déconnexion | Pas de `pong` avant le ping suivant → connexion fermée (détection en **5 à 10 s**, ex. Wi-Fi coupé) |
+| Reconnexion (app) | Délai exponentiel 1 s → 2 → 4 → 8 → 16 → **30 s max**, ±20 % d'aléa ; **immédiate** au retour de l'app au premier plan et à chaque changement de réseau du téléphone (Wi-Fi retrouvé) |
 
 ### Codes de fermeture
 | Code | Signification |

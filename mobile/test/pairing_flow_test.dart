@@ -52,12 +52,16 @@ Matcher _failure(String text) =>
 void main() {
   late MemorySecureStore store;
   late ProviderContainer container;
+  late StreamController<Object> network;
 
   setUp(() {
     store = MemorySecureStore();
+    network = StreamController<Object>.broadcast();
+    addTearDown(network.close);
     container = ProviderContainer(overrides: [
       secureStoreProvider.overrideWithValue(store),
       deviceNameProvider.overrideWith((ref) async => 'Pixel Test'),
+      networkChangesProvider.overrideWithValue(network.stream),
     ]);
     addTearDown(container.dispose);
     container.read(linkStateProvider);
@@ -146,17 +150,53 @@ void main() {
     expect(container.read(pairingNoticeProvider), contains('révoqué'));
   });
 
-  test('oublier le PC → déconnecté, secret supprimé', () async {
+  test('oublier le PC → le PC retire l’appareil de sa liste, secret supprimé', () async {
     final agent = await _agent();
     await service().pairWithQr(_invite(agent).toString());
     await _until(container, linkStateProvider, (s) => s.isConnected);
-    await container.read(pairedPcProvider.notifier).forget();
-    await _until(container, linkStateProvider, (s) => s.status == LinkStatus.idle);
+    expect(await container.read(linkStateProvider.notifier).forgetPc(), isTrue);
+    expect(container.read(linkStateProvider).status, LinkStatus.idle);
     expect(store.values.containsKey('pc.current'), isFalse);
-    for (var i = 0; i < 50 && agent.sessions.isNotEmpty; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(container.read(pairingNoticeProvider), isNull);
+    for (var i = 0; i < 50 && agent.devices.isNotEmpty; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
     }
+    expect(agent.devices, isEmpty);
     expect(agent.sessions, isEmpty);
+  });
+
+  test('oublier un PC injoignable → oublié quand même, message pour le PC', () async {
+    final agent = await _agent();
+    await service().pairWithQr(_invite(agent).toString());
+    await _until(container, linkStateProvider, (s) => s.isConnected);
+    await agent.stop();
+    await _until(container, linkStateProvider, (s) => !s.isConnected);
+    expect(await container.read(linkStateProvider.notifier).forgetPc(), isFalse);
+    expect(store.values.containsKey('pc.current'), isFalse);
+    expect(container.read(pairingNoticeProvider), contains('Appareils'));
+  });
+
+  test('changement de réseau → reconnexion immédiate, sans attendre le délai', () async {
+    final agent = await _agent();
+    await service().pairWithQr(_invite(agent).toString());
+    await _until(container, linkStateProvider, (s) => s.isConnected);
+    final port = agent.port;
+    await agent.stop();
+    // Plusieurs échecs : le délai d'attente grimpe.
+    await _until(container, linkStateProvider, (s) => s.status == LinkStatus.waiting && s.attempt >= 1);
+    final restarted = AgentServer(
+      identity: _identity,
+      config: AgentServerConfig(port: port, address: InternetAddress.loopbackIPv4),
+      devices: agent.devices,
+    );
+    await restarted.start();
+    addTearDown(restarted.dispose);
+    network.add('none');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final sw = Stopwatch()..start();
+    network.add('wifi');
+    await _until(container, linkStateProvider, (s) => s.isConnected);
+    expect(sw.elapsedMilliseconds, lessThan(1500));
   });
 
   test('relance de l’app → reconnexion avec le PC mémorisé', () async {
@@ -165,6 +205,7 @@ void main() {
     final c2 = ProviderContainer(overrides: [
       secureStoreProvider.overrideWithValue(store),
       deviceNameProvider.overrideWith((ref) async => 'Pixel Test'),
+      networkChangesProvider.overrideWithValue(const Stream.empty()),
     ]);
     addTearDown(c2.dispose);
     c2.read(linkStateProvider);

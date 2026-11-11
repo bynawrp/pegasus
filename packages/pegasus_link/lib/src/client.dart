@@ -107,6 +107,10 @@ class SessionInfo {
 /// Ouverture des connexions TLS vers un agent, avec épinglage du certificat.
 abstract final class PegasusClient {
   static const requestTimeout = Duration(seconds: 10);
+
+  /// Ping WebSocket : sans réponse au ping suivant, la connexion est
+  /// considérée comme perdue (détection en 5 à 10 s, spec §5).
+  static const pingInterval = Duration(seconds: 5);
   static const connectTimeout = Duration(seconds: 8);
 
   static Uri wsUri(String host, int port) =>
@@ -141,6 +145,7 @@ abstract final class PegasusClient {
     required int port,
     required String fingerprint,
     Duration timeout = connectTimeout,
+    Duration ping = pingInterval,
   }) async {
     String? seen;
     final http = HttpClient(context: SecurityContext(withTrustedRoots: false))
@@ -163,7 +168,7 @@ abstract final class PegasusClient {
       http.close(force: true);
       rethrow;
     }
-    ws.pingInterval = const Duration(seconds: 15);
+    ws.pingInterval = ping;
     return PegasusConnection._(ws, http);
   }
 }
@@ -248,6 +253,15 @@ class PegasusConnection {
       ),
     });
     return SessionInfo.fromAuth(auth);
+  }
+
+  /// Demande au PC d'oublier cet appareil (spec §3), puis ferme.
+  Future<void> unpair() async {
+    try {
+      await request('session.unpair', const {}, const Duration(seconds: 3));
+    } finally {
+      await close();
+    }
   }
 
   Future<void> close([int code = WebSocketStatus.normalClosure]) async {

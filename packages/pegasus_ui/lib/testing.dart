@@ -3,8 +3,9 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Charge les vraies polices Pegasus pour que les tests de mise en page
@@ -51,3 +52,34 @@ Widget withTextScale(double scale, Widget child) => Builder(
         child: child,
       ),
     );
+
+/// Échoue si un libellé de bouton ou d'onglet passe à la ligne.
+///
+/// Un retour à la ligne ne provoque pas d'overflow mais casse la mise en page
+/// (ex. « Reprendre le contrôle » sur deux lignes dans la barre latérale).
+void expectButtonLabelsOnOneLine(WidgetTester tester) {
+  final buttons = find.byWidgetPredicate((w) =>
+      w is ButtonStyleButton || w is NavigationDestination || w is Tab || w is Chip || w is IconButton);
+  final labels = find.descendant(of: buttons, matching: find.byType(RichText));
+  for (final element in labels.evaluate()) {
+    final paragraph = element.renderObject! as RenderParagraph;
+    final single = TextPainter(
+      text: paragraph.text,
+      textDirection: paragraph.textDirection,
+      textScaler: paragraph.textScaler,
+      maxLines: 1,
+    )..layout();
+    final text = paragraph.text.toPlainText();
+    expect(paragraph.size.height, lessThanOrEqualTo(single.height + 0.5),
+        reason: 'Libellé sur plusieurs lignes : « $text »');
+    expect(paragraph.didExceedMaxLines, isFalse, reason: 'Libellé tronqué : « $text »');
+    single.dispose();
+  }
+}
+
+/// Vérifications de mise en page communes : aucun débordement et aucun
+/// libellé de bouton sur plusieurs lignes.
+void expectCleanLayout(WidgetTester tester) {
+  expectNoOverflow(tester);
+  expectButtonLabelsOnOneLine(tester);
+}

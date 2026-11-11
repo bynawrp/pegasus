@@ -107,6 +107,7 @@ Future<ProviderContainer> _pump(
   final container = ProviderContainer(overrides: [
     secureStoreProvider.overrideWithValue(store),
     deviceNameProvider.overrideWith((ref) async => 'Test'),
+    networkChangesProvider.overrideWithValue(const Stream.empty()),
     pairedPcProvider.overrideWith(() => _FixedPc(pc)),
     if (link != null) linkStateProvider.overrideWith(() => _FixedLink(link)),
     if (pairing != null) pairingServiceProvider.overrideWith(pairing),
@@ -153,23 +154,25 @@ void main() {
       testWidgets('accueil sans PC · $phone', (tester) async {
         await _pump(tester, size: size);
         expect(find.byKey(const ValueKey('scan-qr')), findsOneWidget);
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
       });
 
       testWidgets('scan · $phone', (tester) async {
         await _pump(tester, size: size, home: const ScanScreen());
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
       });
 
       testWidgets('code manuel, clavier ouvert · $phone', (tester) async {
         await _pump(tester, size: size, home: const ManualPairScreen());
         tester.view.viewInsets = const FakeViewPadding(bottom: 300);
         await tester.pump();
-        expectNoOverflow(tester);
-        await tester.tap(find.byKey(const ValueKey('continue')));
+        expectCleanLayout(tester);
+        // Code complet → validation automatique → erreur d'adresse affichée.
+        await tester.enterText(find.byKey(const ValueKey('host')), '192.168');
+        await tester.enterText(find.byKey(const ValueKey('code')), '482193');
         await tester.pump();
         expect(find.byKey(const ValueKey('pair-error')), findsOneWidget);
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
       });
 
       for (final MapEntry(key: name, value: link) in _linkStates.entries) {
@@ -178,7 +181,7 @@ void main() {
           for (final tab in ['tab-home', 'tab-modules', 'tab-pc']) {
             await tester.tap(find.byKey(ValueKey(tab)));
             await tester.pump();
-            expectNoOverflow(tester);
+            expectCleanLayout(tester);
           }
         });
       }
@@ -189,7 +192,7 @@ void main() {
       for (final tab in ['tab-home', 'tab-modules', 'tab-pc']) {
         await tester.tap(find.byKey(ValueKey(tab)));
         await tester.pump();
-        expectNoOverflow(tester);
+        expectCleanLayout(tester);
       }
     });
 
@@ -197,17 +200,19 @@ void main() {
       await _pump(tester, size: const Size(320, 568), home: const ManualPairScreen(), textScale: 1.3);
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('continue')));
+      await tester.enterText(find.byKey(const ValueKey('host')), '192.168');
+      await tester.enterText(find.byKey(const ValueKey('code')), '482193');
       await tester.pump();
-      expectNoOverflow(tester);
+      expect(find.byKey(const ValueKey('pair-error')), findsOneWidget);
+      expectCleanLayout(tester);
     });
 
     testWidgets('texte agrandi ×1.3 · iPhone SE · association', (tester) async {
       await _pump(tester, size: const Size(320, 568), textScale: 1.3);
-      expectNoOverflow(tester);
+      expectCleanLayout(tester);
       await tester.tap(find.byKey(const ValueKey('manual-pair')));
       await tester.pumpAndSettle();
-      expectNoOverflow(tester);
+      expectCleanLayout(tester);
     });
   });
 
@@ -237,7 +242,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('Code expiré, générez-en un nouveau'), findsOneWidget);
-      expectNoOverflow(tester);
+      expectCleanLayout(tester);
     });
 
     testWidgets('code manuel → vérification de l’empreinte → appairage', (tester) async {
@@ -248,11 +253,10 @@ void main() {
           pairing: (ref) => fake = _FakePairing(ref));
       await tester.enterText(find.byKey(const ValueKey('host')), '192.168.1.20');
       await tester.enterText(find.byKey(const ValueKey('code')), '482193');
-      await tester.tap(find.byKey(const ValueKey('continue')));
       await tester.pump();
       await tester.pump();
       expect(find.text('ABCDEFGH'), findsOneWidget);
-      expectNoOverflow(tester);
+      expectCleanLayout(tester);
       await tester.tap(find.byKey(const ValueKey('confirm-fingerprint')));
       await tester.pump();
       expect(fake.calls, [
@@ -269,13 +273,43 @@ void main() {
           pairing: (ref) => fake = _FakePairing(ref));
       await tester.enterText(find.byKey(const ValueKey('host')), '192.168.1.20');
       await tester.enterText(find.byKey(const ValueKey('code')), '482193');
-      await tester.tap(find.byKey(const ValueKey('continue')));
       await tester.pump();
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('reject-fingerprint')));
       await tester.pump();
       expect(find.byKey(const ValueKey('continue')), findsOneWidget);
       expect(fake.calls, ['probe:192.168.1.20:47800']);
+    });
+
+    testWidgets('code en 6 cases xxx-xxx, chiffres uniquement', (tester) async {
+      await _pump(tester, size: const Size(320, 568), home: const ManualPairScreen());
+      expect(find.byKey(const ValueKey('pin-cell-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pin-cell-5')), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('code')), '4a8-21');
+      await tester.pump();
+      final cells = [for (var i = 0; i < 6; i++) find.descendant(of: find.byKey(ValueKey('pin-cell-$i')), matching: find.byType(Text))];
+      expect(tester.widget<Text>(cells[0]).data, '4');
+      expect(tester.widget<Text>(cells[1]).data, '8');
+      expect(tester.widget<Text>(cells[2]).data, '2');
+      expect(tester.widget<Text>(cells[3]).data, '1');
+      expect(tester.widget<Text>(cells[4]).data, '');
+      expectCleanLayout(tester);
+    });
+
+    testWidgets('adresse : virgules converties en points, ip:port collé réparti', (tester) async {
+      late _FakePairing fake;
+      await _pump(tester,
+          size: const Size(393, 852),
+          home: const ManualPairScreen(),
+          pairing: (ref) => fake = _FakePairing(ref));
+      await tester.enterText(find.byKey(const ValueKey('host')), '192,168,1,76');
+      await tester.pump();
+      expect(find.text('192.168.1.76'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('host')), '192.168.1.76:47801');
+      await tester.enterText(find.byKey(const ValueKey('code')), '123456');
+      await tester.pump();
+      await tester.pump();
+      expect(fake.calls.first, 'probe:192.168.1.76:47801');
     });
 
     testWidgets('oublier le PC → retour à l’association', (tester) async {
@@ -308,7 +342,7 @@ void main() {
       container.read(pairingNoticeProvider.notifier).show('« PC » a révoqué l’accès de ce téléphone.');
       await tester.pump();
       expect(find.byKey(const ValueKey('pairing-notice')), findsOneWidget);
-      expectNoOverflow(tester);
+      expectCleanLayout(tester);
     });
   });
 }

@@ -14,6 +14,17 @@ void main() {
     expect(tester.takeException(), isA<FlutterError>());
   });
 
+  testWidgets('le garde-fou détecte un libellé de bouton sur deux lignes', (tester) async {
+    setScreenSize(tester, const Size(300, 300));
+    await tester.pumpWidget(_app(Center(
+      child: SizedBox(
+        width: 120,
+        child: FilledButton(onPressed: () {}, child: const Text('Reprendre le contrôle du PC')),
+      ),
+    )));
+    expect(() => expectButtonLabelsOnOneLine(tester), throwsA(isA<TestFailure>()));
+  });
+
   testWidgets('PegasusPanel : titre long sans débordement', (tester) async {
     setScreenSize(tester, const Size(200, 120));
     await tester.pumpWidget(_app(const PegasusPanel(

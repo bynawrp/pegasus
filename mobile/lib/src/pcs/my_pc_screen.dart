@@ -86,7 +86,7 @@ class MyPcScreen extends ConsumerWidget {
                 onPressed: link.isConnected || link.status == LinkStatus.connecting
                     ? null
                     : () => ref.read(linkStateProvider.notifier).reconnect(),
-                child: const Text('Reconnecter'),
+                child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Reconnecter', maxLines: 1)),
               ),
             ),
             const SizedBox(width: 10),
@@ -95,7 +95,7 @@ class MyPcScreen extends ConsumerWidget {
                 key: const ValueKey('forget'),
                 style: OutlinedButton.styleFrom(foregroundColor: c.danger),
                 onPressed: () => _forget(context, ref, pc.agentName),
-                child: const Text('Oublier ce PC'),
+                child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Oublier ce PC', maxLines: 1)),
               ),
             ),
           ],
@@ -107,7 +107,7 @@ class MyPcScreen extends ConsumerWidget {
             MaterialPageRoute<void>(builder: (_) => const OnboardingScreen(canGoBack: true)),
           ),
           icon: const Icon(Icons.qr_code_scanner_rounded),
-          label: const Text('Associer un autre PC'),
+          label: const Text('Associer un autre PC', maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ],
     );
@@ -118,7 +118,7 @@ class MyPcScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('OUBLIER CE PC ?'),
-        content: Text('Le téléphone ne pourra plus contrôler « $name » sans être associé à nouveau.'),
+        content: Text('« $name » retirera aussi ce téléphone de sa liste. Il faudra l’associer à nouveau.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
           FilledButton(
@@ -129,6 +129,6 @@ class MyPcScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) await ref.read(pairedPcProvider.notifier).forget();
+    if (ok == true) await ref.read(linkStateProvider.notifier).forgetPc();
   }
 }
