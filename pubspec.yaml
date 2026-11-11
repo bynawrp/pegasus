@@ -1,0 +1,14 @@
+name: pegasus_workspace
+description: Monorepo Pegasus (app mobile, agent PC, packages partagés).
+publish_to: none
+
+environment:
+  sdk: ^3.11.4
+
+workspace:
+  - agent
+  - packages/pegasus_protocol
+  - packages/pegasus_ui
+
+dev_dependencies:
+  lints: ^6.0.0

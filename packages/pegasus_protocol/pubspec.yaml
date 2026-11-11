@@ -1,0 +1,13 @@
+name: pegasus_protocol
+description: Protocole Pegasus v1 partagé entre l'app mobile et l'agent PC (voir docs/protocol.md).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.4
+
+resolution: workspace
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
