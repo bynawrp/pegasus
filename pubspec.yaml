@@ -6,6 +6,7 @@ environment:
   sdk: ^3.11.4
 
 workspace:
+  - mobile
   - agent
   - packages/pegasus_protocol
   - packages/pegasus_ui
