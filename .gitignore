@@ -8,3 +8,8 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+
+# Dart / Flutter
+.dart_tool/
+build/
+*.iml

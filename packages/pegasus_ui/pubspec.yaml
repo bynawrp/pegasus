@@ -1,0 +1,19 @@
+name: pegasus_ui
+description: Thème et composants visuels partagés entre l'app mobile et l'agent PC Pegasus.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.4
+  flutter: ">=3.27.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
