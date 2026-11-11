@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: "Compiler aussi l'app iOS (runner macOS, minutes x10 sur dépôt privé)"
+        type: boolean
+        default: true
+
+env:
+  FLUTTER_VERSION: "3.41.6"
+
+jobs:
+  checks:
+    name: Analyse et tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - name: Tests pegasus_protocol
+        working-directory: packages/pegasus_protocol
+        run: dart test
+      - name: Tests pegasus_ui
+        working-directory: packages/pegasus_ui
+        run: flutter test
+
+  android:
+    name: APK Android (debug)
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build APK
+        working-directory: mobile
+        run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pegasus-android-debug
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+  ios:
+    name: App iOS (non signée)
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build iOS (sans signature)
+        working-directory: mobile
+        run: flutter build ios --release --no-codesign
+      - name: Empaqueter l'IPA non signée (pour Sideloadly)
+        working-directory: mobile/build/ios/iphoneos
+        run: |
+          mkdir Payload
+          cp -R Runner.app Payload/
+          zip -qr pegasus-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pegasus-ios-unsigned
+          path: mobile/build/ios/iphoneos/pegasus-unsigned.ipa
+          retention-days: 7
