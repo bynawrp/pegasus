@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Pegasus">
+  <path d="M44 62 Q22 58 5 34 Q20 41 31 41 Q18 30 12 13 Q28 26 39 34 Q33 20 33 6 Q48 21 50 46 Z" fill="#2EF2FF"/>
+  <path d="M24 92 C25 76 31 63 41 55 Q46 46 50 38 L53 26 L50 12 L58 20 L63 17 L66 26 Q73 30 81 40 Q87 47 84 53 Q81 58 73 56 L64 54 Q60 63 59 72 L59 92 Z" fill="#FF2E88"/>
+  <circle cx="70" cy="37" r="2.8" fill="#0B0614"/>
+</svg>

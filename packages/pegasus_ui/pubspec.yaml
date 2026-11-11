@@ -1,6 +1,6 @@
 name: pegasus_ui
 description: Thème et composants visuels partagés entre l'app mobile et l'agent PC Pegasus.
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:
@@ -17,3 +17,25 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+flutter:
+  assets:
+    - assets/logo/
+  fonts:
+    - family: Barlow
+      fonts:
+        - asset: fonts/Barlow-Regular.ttf
+          weight: 400
+        - asset: fonts/Barlow-Medium.ttf
+          weight: 500
+        - asset: fonts/Barlow-SemiBold.ttf
+          weight: 600
+    - family: BarlowCondensed
+      fonts:
+        - asset: fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
+        - asset: fonts/BarlowCondensed-Bold.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: fonts/JetBrainsMono-Variable.ttf

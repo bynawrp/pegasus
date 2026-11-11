@@ -40,8 +40,8 @@ Maquettes interactives :
 
 ## Style
 
-- Thème sombre par défaut, accent bleu `#8AB4FF`, fond `#0D1017`, surfaces `#161B24`
-- Typo : Space Grotesk (titres), Inter (texte)
+- DA gaming / néon : palette Néon (magenta + cyan) en thème sombre par défaut, 5 autres palettes et le mode clair au choix dans les réglages — voir [da.md](da.md)
+- Typo : Barlow Condensed (titres), Barlow (texte), JetBrains Mono (chiffres)
 - Zones tactiles ≥ 44 px, confirmation avant éteindre/redémarrer
 
 ## Accueil : grille de widgets (inspirée de l'écran d'accueil iOS)
