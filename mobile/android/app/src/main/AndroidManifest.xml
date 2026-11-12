@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Connexion à l'agent sur le réseau local. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Scan du QR code d'appairage. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
-        android:label="pegasus"
+        android:label="Pegasus"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

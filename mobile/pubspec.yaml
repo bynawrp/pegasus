@@ -9,9 +9,15 @@ environment:
 resolution: workspace
 
 dependencies:
+  connectivity_plus: ^7.3.2
+  device_info_plus: ^13.3.0
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.3.2
+  flutter_secure_storage: ^11.2.0
+  mobile_scanner: ^7.5.0
+  pegasus_link:
+    path: ../packages/pegasus_link
   pegasus_protocol:
     path: ../packages/pegasus_protocol
   pegasus_ui:
