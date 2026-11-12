@@ -34,7 +34,15 @@ step "Tests mobile"             bash -c "cd mobile && flutter test"
 if [ "$BUILD" = 1 ]; then
   step "Build APK (debug)"      bash -c "cd mobile && flutter build apk --debug"
   case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*) step "Build agent Windows" bash -c "cd agent && flutter build windows --release" ;;
+    MINGW*|MSYS*|CYGWIN*)
+      if tasklist 2>/dev/null | grep -qi pegasus_agent.exe; then
+        echo "!! L'agent Pegasus tourne : fermez-le (il verrouille son .exe) puis relancez."
+        results+=("ÉCHEC   Build agent Windows (agent en cours d'exécution)")
+        failed=1
+      else
+        step "Build agent Windows" bash -c "cd agent && flutter build windows --release"
+      fi
+      ;;
   esac
 fi
 

@@ -15,6 +15,7 @@ import 'package:pegasus/src/pairing/scan_screen.dart';
 import 'package:pegasus_link/pegasus_link.dart';
 import 'package:pegasus_ui/pegasus_ui.dart';
 import 'package:pegasus_ui/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _phones = {
   'iPhone SE (320×568)': Size(320, 568),
@@ -172,6 +173,7 @@ class _FixedPc extends PairedPcNotifier {
 
 void main() {
   setUpAll(loadPegasusFonts);
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('zéro overflow', () {
     for (final MapEntry(key: phone, value: size) in _phones.entries) {
