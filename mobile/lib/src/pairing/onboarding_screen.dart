@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pegasus_ui/pegasus_ui.dart';
 
+import '../core/local_network.dart';
 import '../core/providers.dart';
 import 'manual_pair_screen.dart';
 import 'scan_screen.dart';
@@ -17,6 +18,8 @@ class OnboardingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.pegasus;
     final notice = ref.watch(pairingNoticeProvider);
+    final network = ref.watch(localNetworkProvider);
+    final allowed = network == LocalNetworkAccess.granted;
     final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: canGoBack ? AppBar(backgroundColor: Colors.transparent) : null,
@@ -37,6 +40,34 @@ class OnboardingScreen extends ConsumerWidget {
                     border: Border.all(color: c.danger.withValues(alpha: 0.5)),
                   ),
                   child: Text(notice, maxLines: 2, overflow: TextOverflow.ellipsis),
+                ),
+              if (network == LocalNetworkAccess.denied)
+                Container(
+                  key: const ValueKey('network-denied'),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                  decoration: BoxDecoration(
+                    color: c.warning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(PegasusRadii.control),
+                    border: Border.all(color: c.warning.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Pegasus a besoin de l’accès au réseau local pour joindre votre PC.',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(color: c.text),
+                        ),
+                      ),
+                      TextButton(
+                        key: const ValueKey('open-settings'),
+                        onPressed: () => ref.read(localNetworkProvider.notifier).openSettings(),
+                        child: const Text('Réglages', maxLines: 1),
+                      ),
+                    ],
+                  ),
                 ),
               Expanded(
                 child: Center(
@@ -65,16 +96,19 @@ class OnboardingScreen extends ConsumerWidget {
               ),
               FilledButton.icon(
                 key: const ValueKey('scan-qr'),
-                onPressed: () => Navigator.of(context).push(
+                onPressed: !allowed ? null : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const ScanScreen()),
                 ),
                 icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scanner le QR code'),
+                label: Text(
+                  network == LocalNetworkAccess.checking ? 'Autorisation réseau en attente…' : 'Scanner le QR code',
+                  maxLines: 1,
+                ),
               ),
               const SizedBox(height: 10),
               OutlinedButton(
                 key: const ValueKey('manual-pair'),
-                onPressed: () => Navigator.of(context).push(
+                onPressed: !allowed ? null : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const ManualPairScreen()),
                 ),
                 child: const Text('Saisir le code à la main'),

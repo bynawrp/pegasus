@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pegasus/main.dart';
+import 'dart:async';
+
+import 'package:pegasus/src/core/local_network.dart';
 import 'package:pegasus/src/core/pairing_service.dart';
 import 'package:pegasus/src/core/providers.dart';
 import 'package:pegasus/src/core/secure_store.dart';
@@ -101,6 +104,7 @@ Future<ProviderContainer> _pump(
   double textScale = 1,
   Widget? home,
   _FakePairing Function(Ref)? pairing,
+  _FakeNetwork? network,
 }) async {
   setScreenSize(tester, size);
   final store = MemorySecureStore();
@@ -108,6 +112,7 @@ Future<ProviderContainer> _pump(
     secureStoreProvider.overrideWithValue(store),
     deviceNameProvider.overrideWith((ref) async => 'Test'),
     networkChangesProvider.overrideWithValue(const Stream.empty()),
+    localNetworkPermissionProvider.overrideWithValue(network ?? _FakeNetwork(true)),
     pairedPcProvider.overrideWith(() => _FixedPc(pc)),
     if (link != null) linkStateProvider.overrideWith(() => _FixedLink(link)),
     if (pairing != null) pairingServiceProvider.overrideWith(pairing),
@@ -130,6 +135,25 @@ Future<ProviderContainer> _pump(
   await tester.pump();
   await tester.pump();
   return container;
+}
+
+class _FakeNetwork implements LocalNetworkPermission {
+  _FakeNetwork(this.answer);
+
+  /// `null` : l'utilisateur n'a pas encore répondu.
+  bool? answer;
+  int settingsOpened = 0;
+  int requests = 0;
+
+  @override
+  Future<bool> request() {
+    requests++;
+    final a = answer;
+    return a == null ? Completer<bool>().future : Future.value(a);
+  }
+
+  @override
+  Future<void> openSettings() async => settingsOpened++;
 }
 
 class _FixedPc extends PairedPcNotifier {
@@ -213,6 +237,51 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('manual-pair')));
       await tester.pumpAndSettle();
       expectCleanLayout(tester);
+    });
+  });
+
+  group('autorisation réseau local', () {
+    for (final MapEntry(key: phone, value: size) in _phones.entries) {
+      testWidgets('en attente : boutons grisés · $phone', (tester) async {
+        await _pump(tester, size: size, network: _FakeNetwork(null));
+        expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('scan-qr'))).onPressed, isNull);
+        expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('manual-pair'))).onPressed, isNull);
+        expect(find.text('Autorisation réseau en attente…'), findsOneWidget);
+        expectCleanLayout(tester);
+      });
+
+      testWidgets('refusée : bandeau + boutons grisés · $phone', (tester) async {
+        await _pump(tester, size: size, network: _FakeNetwork(false));
+        expect(find.byKey(const ValueKey('network-denied')), findsOneWidget);
+        expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('scan-qr'))).onPressed, isNull);
+        expectCleanLayout(tester);
+      });
+    }
+
+    testWidgets('refusée + message de révocation · iPhone SE ×1.3', (tester) async {
+      final container = await _pump(tester,
+          size: const Size(320, 568), textScale: 1.3, network: _FakeNetwork(false));
+      container.read(pairingNoticeProvider.notifier).show('« PC » a révoqué l’accès de ce téléphone.');
+      await tester.pump();
+      expectCleanLayout(tester);
+    });
+
+    testWidgets('demandée dès l’ouverture, même avec un PC déjà associé', (tester) async {
+      final net = _FakeNetwork(true);
+      await _pump(tester, size: const Size(393, 852), pc: _pc, link: _linkStates['connecté'], network: net);
+      expect(net.requests, 1);
+    });
+
+    testWidgets('Réglages puis autorisation accordée → boutons actifs', (tester) async {
+      final net = _FakeNetwork(false);
+      final container = await _pump(tester, size: const Size(393, 852), network: net);
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      expect(net.settingsOpened, 1);
+      net.answer = true;
+      await container.read(localNetworkProvider.notifier).check();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('network-denied')), findsNothing);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('scan-qr'))).onPressed, isNotNull);
     });
   });
 
