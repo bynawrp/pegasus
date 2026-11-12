@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pegasus_protocol/pegasus_protocol.dart';
 import 'package:pegasus/main.dart';
 import 'package:pegasus/src/core/local_network.dart';
 import 'package:pegasus/src/core/providers.dart';
@@ -75,7 +76,13 @@ class _Sender implements RemoteSender {
   void command(String op, Map<String, Object?> data) => log.add('$op ${jsonEncode(data)}');
 
   @override
-  Future<void> request(String op, Map<String, Object?> data) async => log.add('$op ${jsonEncode(data)}');
+  Future<Map<String, Object?>> request(String op, Map<String, Object?> data) async {
+    log.add('$op ${jsonEncode(data)}');
+    return const {};
+  }
+
+  @override
+  Stream<Envelope> get events => const Stream.empty();
 }
 
 Future<(_Sender, ProviderContainer)> _pump(
@@ -126,8 +133,9 @@ void main() {
     for (final MapEntry(key: phone, value: size) in _phones.entries) {
       testWidgets('par défaut : trackpad 4×4 + clavier 4×2, zéro overflow · $phone', (tester) async {
         final (_, c) = await _pump(tester, size: size);
-        expect(_layout(c).all.map((w) => (w.moduleId, w.size)).toList(),
+        expect(_layout(c).pages[0].map((w) => (w.moduleId, w.size)).toList(),
             [('trackpad', WidgetSize.large), ('keyboard', WidgetSize.wide)]);
+        expect(_layout(c).pages[1].map((w) => w.moduleId).toList(), ['media', 'power', 'favorites', 'link']);
         expect(find.byKey(const ValueKey('trackpad-surface')), findsOneWidget);
         expect(find.byType(KeyboardShortcutsPad), findsOneWidget);
         expect(find.byType(Scrollable), findsWidgets); // PageView uniquement (horizontal, paginé)
@@ -152,10 +160,14 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('home-add')));
       await _settle(tester);
+      await tester.tap(find.byKey(const ValueKey('gallery-keyboard')));
+      await _settle(tester);
+      expectCleanLayout(tester);
       await tester.tap(find.byKey(const ValueKey('add-keyboard-small')));
       await _settle(tester);
-      expect(_layout(c).pageCount, 2);
-      expect(_layout(c).pages[1].single.size, WidgetSize.small);
+      expect(_layout(c).pageCount, 2, reason: 'page 1 pleine → posé en page 2');
+      expect(_layout(c).pages[1].last.moduleId, 'keyboard');
+      expect(_layout(c).pages[1].last.size, WidgetSize.small);
       expectCleanLayout(tester);
     });
 
@@ -163,17 +175,17 @@ void main() {
       final (_, c) = await _pump(tester);
       await tester.tap(find.byKey(const ValueKey('home-edit')));
       await tester.pump();
-      final kb = _layout(c).all.last.id;
+      final kb = _layout(c).pages[0].last.id;
       await tester.tap(find.byKey(ValueKey('remove-$kb')));
       await tester.pump();
-      expect(_layout(c).all.map((w) => w.moduleId), ['trackpad']);
+      expect(_layout(c).pages[0].map((w) => w.moduleId), ['trackpad']);
     });
 
     testWidgets('changer la taille d’un widget', (tester) async {
       final (_, c) = await _pump(tester);
       await tester.tap(find.byKey(const ValueKey('home-edit')));
       await tester.pump();
-      final tp = _layout(c).all.first.id;
+      final tp = _layout(c).pages[0].first.id;
       await tester.tap(find.byKey(ValueKey('resize-$tp')));
       await _settle(tester);
       await tester.tap(find.byKey(const ValueKey('size-medium')));
@@ -197,8 +209,8 @@ void main() {
 
     testWidgets('façon iOS : déposer le clavier sur le trackpad le pousse dessous', (tester) async {
       final (_, c) = await _pump(tester);
-      final tp = _layout(c).all.first.id;
-      final kb = _layout(c).all.last.id;
+      final tp = _layout(c).pages[0].first.id;
+      final kb = _layout(c).pages[0].last.id;
       await tester.tap(find.byKey(const ValueKey('home-edit')));
       await tester.pump();
       final pages = tester.getRect(find.byKey(const ValueKey('home-pages')));
@@ -213,8 +225,8 @@ void main() {
 
     testWidgets('aperçu en direct : les autres widgets se déplacent pendant le glisser', (tester) async {
       final (_, c) = await _pump(tester);
-      final tp = _layout(c).all.first.id;
-      final kb = _layout(c).all.last.id;
+      final tp = _layout(c).pages[0].first.id;
+      final kb = _layout(c).pages[0].last.id;
       await tester.tap(find.byKey(const ValueKey('home-edit')));
       await tester.pump();
       final pages = tester.getRect(find.byKey(const ValueKey('home-pages')));
@@ -239,14 +251,12 @@ void main() {
       await c.read(homeLayoutProvider.notifier).add('keyboard', WidgetSize.small);
       final prefs = await SharedPreferences.getInstance();
       final saved = HomeLayout.fromJson(jsonDecode(prefs.getString('home.layout')!), knownModule: (_) => true);
-      expect(saved.all, hasLength(3));
+      expect(saved.all, hasLength(7));
     });
   });
 
   testWidgets('glisser sur le trackpad de l’accueil ne change pas de page', (tester) async {
     final (sender, c) = await _pump(tester);
-    await c.read(homeLayoutProvider.notifier).add('keyboard', WidgetSize.small); // crée la page 2
-    await tester.pump();
     expect(_layout(c).pageCount, 2);
     final surface = find.byKey(const ValueKey('trackpad-surface'));
     final g = await tester.startGesture(tester.getCenter(surface));

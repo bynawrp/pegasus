@@ -57,6 +57,19 @@
 	<string>La caméra sert à scanner le QR code affiché par Pegasus sur votre PC.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Pegasus se connecte à votre PC sur le réseau local.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.bynawrp.pegasus</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pegasus</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_pegasus._tcp</string>

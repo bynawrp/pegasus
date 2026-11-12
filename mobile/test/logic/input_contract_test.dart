@@ -33,7 +33,13 @@ class _Validating implements RemoteSender {
   void command(String op, Map<String, Object?> data) => _check(op, data);
 
   @override
-  Future<void> request(String op, Map<String, Object?> data) async => _check(op, data);
+  Future<Map<String, Object?>> request(String op, Map<String, Object?> data) async {
+    _check(op, data);
+    return const {};
+  }
+
+  @override
+  Stream<Envelope> get events => const Stream.empty();
 }
 
 void main() {

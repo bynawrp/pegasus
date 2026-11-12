@@ -5,8 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pegasus_agent/main.dart';
 import 'package:pegasus_agent/src/core/agent_controller.dart';
+import 'package:pegasus_agent/src/modules/apps/app_catalog.dart';
 import 'package:pegasus_link/pegasus_link.dart';
 import 'package:pegasus_ui/testing.dart';
+
+class _FakeScanner extends StartMenuScanner {
+  _FakeScanner() : super(const []);
+
+  @override
+  Future<List<InstalledApp>> scan() async => [
+        for (var i = 0; i < 60; i++)
+          InstalledApp(id: 'app$i', name: i == 0 ? 'Une application au nom vraiment très très long pour tester' : 'Application $i', path: 'C:/a$i.lnk'),
+      ];
+}
 
 class FakeAgentController extends AgentController {
   FakeAgentController(this.initial);
@@ -30,6 +41,12 @@ class FakeAgentController extends AgentController {
 
   @override
   void rename(String deviceId, String name) => calls.add('rename:$deviceId:$name');
+
+  @override
+  Future<void> addFavorite(InstalledApp app) async => calls.add('add:${app.id}');
+
+  @override
+  void removeFavorite(String id) => calls.add('remove:$id');
 }
 
 PairedDevice _device(int i) => PairedDevice(
@@ -41,7 +58,9 @@ PairedDevice _device(int i) => PairedDevice(
       lastSeen: i == 3 ? DateTime(2026, 11, 10, 18, 5) : null,
     );
 
-AgentViewState _running({int devices = 3, int connected = 2, int activity = 30, bool paused = false}) =>
+Favorite _fav(int i) => Favorite(id: 'app$i', name: i == 0 ? 'Favori au nom très très long pour la mise en page' : 'Favori $i', path: 'C:/a$i.lnk');
+
+AgentViewState _running({int devices = 3, int connected = 2, int activity = 30, bool paused = false, int favorites = 3}) =>
     AgentViewState(
       status: AgentStatus.running,
       agentName: 'PC-BUREAU-GAMING-DE-COMPETITION',
@@ -55,6 +74,7 @@ AgentViewState _running({int devices = 3, int connected = 2, int activity = 30, 
         expiresAt: DateTime.now().add(const Duration(minutes: 5)),
       ),
       devices: [for (var i = 0; i < devices; i++) _device(i)],
+      favorites: [for (var i = 0; i < favorites; i++) _fav(i)],
       connected: {for (var i = 0; i < connected; i++) 'd$i'},
       activity: [
         for (var i = 0; i < activity; i++)
@@ -69,7 +89,7 @@ final _states = <String, AgentViewState>{
   'actif': _running(),
   'en pause': _running(paused: true),
   'vide': _running(devices: 0, connected: 0, activity: 0),
-  'beaucoup d’appareils': _running(devices: 40, connected: 12),
+  'beaucoup d’appareils': _running(devices: 40, connected: 12, favorites: 30),
   'code verrouillé': AgentViewState(
     status: AgentStatus.running,
     agentName: 'PC',
@@ -98,7 +118,10 @@ Future<FakeAgentController> _pump(WidgetTester tester, AgentViewState state, Siz
   setScreenSize(tester, size);
   final fake = FakeAgentController(state);
   await tester.pumpWidget(ProviderScope(
-    overrides: [agentControllerProvider.overrideWith(() => fake)],
+    overrides: [
+      agentControllerProvider.overrideWith(() => fake),
+      startMenuScannerProvider.overrideWithValue(_FakeScanner()),
+    ],
     child: withTextScale(textScale, const PegasusAgentApp()),
   ));
   await tester.pump();
@@ -116,6 +139,10 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('nav-devices')));
         await tester.pump();
         expectCleanLayout(tester);
+        await tester.tap(find.byKey(const ValueKey('nav-favorites')));
+        await tester.pump();
+        await tester.pump();
+        expectCleanLayout(tester);
       });
     }
   }
@@ -125,6 +152,23 @@ void main() {
     expectCleanLayout(tester);
     await tester.tap(find.byKey(const ValueKey('nav-devices')));
     await tester.pump();
+    expectCleanLayout(tester);
+  });
+
+  testWidgets('favoris : recherche, ajout, retrait', (tester) async {
+    final fake = await _pump(tester, _running(favorites: 1), const Size(1100, 700));
+    await tester.tap(find.byKey(const ValueKey('nav-favorites')));
+    await tester.pump();
+    await tester.pump();
+    await tester.enterText(find.byKey(const ValueKey('app-search')), 'Application 4');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('app-app4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-app5')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('add-app-app4')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('remove-fav-app0')));
+    await tester.pump();
+    expect(fake.calls, ['add:app4', 'remove:app0']);
     expectCleanLayout(tester);
   });
 

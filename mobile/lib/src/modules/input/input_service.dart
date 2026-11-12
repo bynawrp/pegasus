@@ -5,10 +5,13 @@ import 'package:pegasus_protocol/pegasus_protocol.dart';
 
 import '../../core/providers.dart';
 
-/// Envoi vers l'agent (remplacé par un enregistreur dans les tests).
+/// Échanges avec l'agent pour les modules (remplacé par un faux dans les tests).
 abstract class RemoteSender {
   void command(String op, Map<String, Object?> data);
-  Future<void> request(String op, Map<String, Object?> data);
+  Future<Map<String, Object?>> request(String op, Map<String, Object?> data);
+
+  /// Évènements poussés par l'agent (`audio.changed`…).
+  Stream<Envelope> get events;
 }
 
 class LinkSender implements RemoteSender {
@@ -19,7 +22,11 @@ class LinkSender implements RemoteSender {
   void command(String op, Map<String, Object?> data) => _ref.read(linkProvider).command(op, data);
 
   @override
-  Future<void> request(String op, Map<String, Object?> data) => _ref.read(linkProvider).request(op, data);
+  Future<Map<String, Object?>> request(String op, Map<String, Object?> data) =>
+      _ref.read(linkProvider).request(op, data);
+
+  @override
+  Stream<Envelope> get events => _ref.read(linkProvider).events;
 }
 
 final remoteSenderProvider = Provider<RemoteSender>(LinkSender.new);
@@ -114,8 +121,8 @@ class InputService {
 
   /// Les requêtes partent une par une, dans l'ordre ; une erreur n'arrête pas la file.
   Future<void> _enqueue(String op, Map<String, Object?> data) {
-    final next = _queue.then((_) => _sender.request(op, data));
-    _queue = next.catchError((_) {});
+    final Future<void> next = _queue.then((_) => _sender.request(op, data));
+    _queue = next.catchError((Object _) {});
     return next;
   }
 

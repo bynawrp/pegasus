@@ -36,7 +36,13 @@ class _Sender implements RemoteSender {
   void command(String op, Map<String, Object?> data) => log.add('$op $data');
 
   @override
-  Future<void> request(String op, Map<String, Object?> data) async => log.add('$op $data');
+  Future<Map<String, Object?>> request(String op, Map<String, Object?> data) async {
+    log.add('$op $data');
+    return const {};
+  }
+
+  @override
+  Stream<Envelope> get events => const Stream.empty();
 }
 
 Duration ms(int v) => Duration(milliseconds: v);

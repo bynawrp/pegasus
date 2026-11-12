@@ -74,7 +74,7 @@ Chaque module déclare les tailles qu'il supporte et sa taille par défaut. L'ut
 
 ### Accueil par défaut (premier lancement, provisoire)
 Les modules du MVP : trackpad, clavier, lecture, alimentation rapide, applications favorites.
-Implémenté (paquet 2) : trackpad 4×4 + clavier 4×2 (page 1 pleine) ; les autres modules du MVP rejoindront l'accueil quand ils seront disponibles.
+Implémenté : page 1 = trackpad 4×4 + clavier 4×2 ; page 2 = lecture 4×2, alimentation 2×2, favoris 2×2, ouvrir un lien 1×1 (nouvelles installations).
 
 ### Gestes du trackpad
 | Geste | Action sur le PC |

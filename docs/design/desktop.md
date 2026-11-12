@@ -38,5 +38,5 @@ Barre latérale fixe + zone de contenu. Bouton « Mettre en pause / Reprendre le
 
 ## Découpage par palier
 
-- **MVP** : Accueil, Appareils (liste + révocation), Réglages de base (démarrage auto, port), icône + pause, QR d'association.
-- **V2** : Autorisations par module, Favoris éditables, Journal complet, dossier de réception, thème.
+- **MVP** : Accueil, Appareils (liste + révocation), Favoris (choix parmi les applications du menu Démarrer, ordre, retrait — paquet 3), Réglages de base (démarrage auto, port), icône + pause, QR d'association.
+- **V2** : Autorisations par module, Journal complet, dossier de réception, thème.

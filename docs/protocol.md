@@ -227,8 +227,9 @@ Valeurs de `key` : `escape`, `tab`, `enter`, `backspace`, `delete`, `space`, `up
 | `apps.launch` | req | `{ id }` | — |
 | `url.open` | req | `{ url }` | — |
 
-- `apps.launch` n'accepte que les identifiants de la liste des favoris configurée dans l'agent (jamais un chemin arbitraire).
+- `apps.launch` n'accepte que les identifiants de la liste des favoris configurée dans l'agent (jamais un chemin arbitraire). `apps.list` n'expose jamais le chemin sur le disque.
 - `url.open` n'accepte que `http://` et `https://`, 2048 caractères max.
+- Liens entrants dans l'app : `pegasus://open?url=<lien encodé>` (raccourci iOS de la feuille de partage) et « Partager → Pegasus » sur Android ouvrent l'écran « Ouvrir un lien » prérempli.
 
 ## 9. Limites et sécurité
 

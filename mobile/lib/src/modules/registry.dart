@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../home/home_layout.dart';
+import 'favorites/favorites_module.dart';
 import 'keyboard/keyboard_module.dart';
+import 'link/link_module.dart';
+import 'media/media_module.dart';
+import 'power/power_module.dart';
 import 'trackpad/trackpad_module.dart';
 
 enum ModuleCategory {
@@ -63,12 +67,13 @@ final List<PegasusModule> moduleRegistry = [
   trackpadModule,
   keyboardModule,
   const PegasusModule(id: 'gamepad', name: 'Manette', icon: Icons.sports_esports_rounded, category: ModuleCategory.control, tier: ModuleTier.v3),
-  const PegasusModule(id: 'media', name: 'Lecture', icon: Icons.play_circle_outline_rounded, category: ModuleCategory.media, tier: ModuleTier.mvp),
+  mediaModule,
   const PegasusModule(id: 'mixer', name: 'Mixeur audio', icon: Icons.tune_rounded, category: ModuleCategory.media, tier: ModuleTier.v2),
-  const PegasusModule(id: 'power', name: 'Alimentation', icon: Icons.power_settings_new_rounded, category: ModuleCategory.system, tier: ModuleTier.mvp),
+  powerModule,
   const PegasusModule(id: 'monitor', name: 'Surveillance', icon: Icons.monitor_heart_outlined, category: ModuleCategory.system, tier: ModuleTier.v2),
   const PegasusModule(id: 'display', name: 'Écran', icon: Icons.brightness_6_rounded, category: ModuleCategory.system, tier: ModuleTier.v2),
-  const PegasusModule(id: 'favorites', name: 'Favoris', icon: Icons.apps_rounded, category: ModuleCategory.apps, tier: ModuleTier.mvp),
+  favoritesModule,
+  linkModule,
   const PegasusModule(id: 'windows', name: 'Fenêtres', icon: Icons.web_asset_rounded, category: ModuleCategory.apps, tier: ModuleTier.v2),
   const PegasusModule(id: 'processes', name: 'Processus', icon: Icons.memory_rounded, category: ModuleCategory.apps, tier: ModuleTier.v2),
   const PegasusModule(id: 'transfers', name: 'Transferts', icon: Icons.swap_vert_rounded, category: ModuleCategory.files, tier: ModuleTier.v2),
@@ -82,5 +87,13 @@ final List<PegasusModule> moduleRegistry = [
 
 PegasusModule? moduleById(String id) => moduleRegistry.where((m) => m.id == id).firstOrNull;
 
-/// Accueil par défaut (premier lancement) : modules du MVP disponibles.
-const defaultHomeModules = [('trackpad', WidgetSize.large), ('keyboard', WidgetSize.wide)];
+/// Accueil par défaut (premier lancement) : modules du MVP.
+/// Page 1 : trackpad + clavier ; page 2 : lecture, alimentation, favoris, lien.
+const defaultHomeModules = [
+  ('trackpad', WidgetSize.large),
+  ('keyboard', WidgetSize.wide),
+  ('media', WidgetSize.wide),
+  ('power', WidgetSize.medium),
+  ('favorites', WidgetSize.medium),
+  ('link', WidgetSize.small),
+];
