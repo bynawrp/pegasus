@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pegasus_link/pegasus_link.dart';
 import 'package:pegasus_protocol/pegasus_protocol.dart';
 
+import '../modules/input/input_module.dart';
+import '../platform/input_controller.dart';
 import 'agent_store.dart';
 
 const agentVersion = '0.1.0';
@@ -111,6 +113,9 @@ class AgentViewState {
 /// Dossier des données de l'agent (remplaçable dans les tests).
 final agentDirectoryProvider = FutureProvider<Directory>((ref) => getApplicationSupportDirectory());
 
+/// Souris / clavier du PC (remplacé par un enregistreur dans les tests).
+final inputControllerProvider = Provider<InputController?>((ref) => InputController.platform());
+
 /// Configuration réseau du serveur (remplaçable dans les tests).
 final agentServerConfigProvider = Provider<AgentServerConfig>(
   (ref) => const AgentServerConfig(agentVersion: agentVersion),
@@ -160,6 +165,12 @@ class AgentController extends Notifier<AgentViewState> {
       );
       _store = store;
       _server = server;
+      final input = ref.read(inputControllerProvider);
+      if (input != null) {
+        registerInputModule(server, input);
+      } else {
+        server.setModule('input', false);
+      }
       _events = server.events.listen(_onEvent);
       _pairingChanges = server.pairing.changes.listen(_onPairingChanged);
       state = state.copyWith(

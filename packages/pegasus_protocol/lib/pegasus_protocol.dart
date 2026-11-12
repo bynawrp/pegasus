@@ -6,6 +6,7 @@ library;
 export 'src/close_codes.dart';
 export 'src/envelope.dart';
 export 'src/error_code.dart';
+export 'src/input.dart';
 export 'src/modules.dart';
 export 'src/pairing.dart';
 export 'src/security.dart';

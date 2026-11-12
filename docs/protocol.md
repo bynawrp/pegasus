@@ -189,11 +189,11 @@ Le préfixe de `op` désigne le module. Il correspond à un interrupteur de la s
 | Op | Type | Données |
 |---|---|---|
 | `input.move` | cmd | `{ dx, dy }` en pixels (sensibilité appliquée côté app), envoyé par lots jusqu'à ~60/s |
-| `input.scroll` | cmd | `{ dx, dy }` en crans (décimaux acceptés) |
+| `input.scroll` | cmd | `{ dx, dy }` en crans (décimaux acceptés) ; `dy > 0` défile vers le bas, `dx > 0` vers la droite |
 | `input.button` | cmd | `{ button: "left"\|"right"\|"middle", state: "down"\|"up" }` (glisser-déposer) |
 | `input.click` | req | `{ button: "left"\|"right"\|"middle", count: 1\|2 }` |
 | `input.text` | req | `{ text }` — 1000 caractères max, Unicode complet |
-| `input.key` | req | `{ key, modifiers: ["ctrl","alt","shift","win"] }` |
+| `input.key` | req | `{ key, modifiers: ["ctrl","alt","shift","win"], repeat?: 1-100 }` — `repeat` (ajout compatible, défaut 1) répète la touche, ex. 8 × Retour arrière |
 
 Valeurs de `key` : `escape`, `tab`, `enter`, `backspace`, `delete`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `f1`…`f12`, `printscreen`, une lettre ou un chiffre (`a`…`z`, `0`…`9`). Exemples : Alt+Tab = `{ "key": "tab", "modifiers": ["alt"] }`, Win seul = `{ "key": "win", "modifiers": [] }`.
 

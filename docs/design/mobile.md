@@ -73,3 +73,19 @@ Chaque module déclare les tailles qu'il supporte et sa taille par défaut. L'ut
 
 ### Accueil par défaut (premier lancement, provisoire)
 Les modules du MVP : trackpad, clavier, lecture, alimentation rapide, applications favorites.
+Implémenté (paquet 2) : trackpad 4×4 + clavier 4×2 (page 1 pleine) ; les autres modules du MVP rejoindront l'accueil quand ils seront disponibles.
+
+### Gestes du trackpad
+| Geste | Action sur le PC |
+|---|---|
+| 1 doigt qui glisse | Déplace le pointeur (sensibilité ×1,6, accélération de Windows) |
+| Tap | Clic gauche (deux taps = double clic) |
+| Tap à 2 doigts | Clic droit |
+| 2 doigts qui glissent | Défilement (sens naturel, vertical et horizontal) |
+| Tap puis appui maintenu qui glisse | Glisser-déposer |
+| Boutons Gauche / Droit | Appui = bouton enfoncé, relâche = relevé |
+
+### Clavier
+- Frappe en direct : chaque caractère part aussitôt ; corrections automatiques et modifications au milieu du texte rejouées (flèches + retour arrière + texte).
+- Modificateurs Ctrl / Alt / Maj / Win à activer puis lettre ou touche = raccourci.
+- Touches spéciales (Échap, Tab, flèches, Suppr, Entrée) et raccourcis (Alt+Tab, Copier, Coller, Annuler, Tout, Bureau, Win, Fermer).
