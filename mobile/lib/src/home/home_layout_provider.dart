@@ -9,6 +9,17 @@ import 'home_layout.dart';
 
 const _key = 'home.layout';
 
+/// Nombre de doigts posés sur un trackpad : tant qu'il y en a, les pages de
+/// l'accueil ne défilent pas (le geste appartient au trackpad).
+final homePagingLockProvider = NotifierProvider<HomePagingLock, int>(HomePagingLock.new);
+
+class HomePagingLock extends Notifier<int> {
+  @override
+  int build() => 0;
+  void hold() => state++;
+  void release() => state = state > 0 ? state - 1 : 0;
+}
+
 /// Mise en page de l'accueil, enregistrée sur le téléphone.
 final homeLayoutProvider = AsyncNotifierProvider<HomeLayoutNotifier, HomeLayout>(HomeLayoutNotifier.new);
 
@@ -52,13 +63,8 @@ class HomeLayoutNotifier extends AsyncNotifier<HomeLayout> {
 
   Future<void> resize(String id, WidgetSize size) => _save(_current.resize(id, size));
 
-  /// Déplace ; renvoie `false` si la place est prise.
-  Future<bool> move(String id, int page, int col, int row) async {
-    final moved = _current.move(id, page, col, row);
-    if (moved == null) return false;
-    await _save(moved);
-    return true;
-  }
+  /// Enregistre une mise en page issue d'un glisser-déposer (aperçu validé).
+  Future<void> commit(HomeLayout layout) => _save(layout);
 
   Future<void> reset() => _save(defaultLayout());
 }

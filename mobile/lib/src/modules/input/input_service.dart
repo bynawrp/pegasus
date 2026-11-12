@@ -30,10 +30,10 @@ final inputServiceProvider = Provider<InputService>((ref) {
   return service;
 });
 
-/// Module `input` côté app : regroupe les mouvements (≤ 60 envois/s,
+/// Module `input` côté app : regroupe les mouvements (≤ ~80 envois/s,
 /// spec §8) et sérialise les requêtes clavier pour garder l'ordre de frappe.
 class InputService {
-  InputService(this._sender, {this.flushInterval = const Duration(milliseconds: 16)});
+  InputService(this._sender, {this.flushInterval = const Duration(milliseconds: 12)});
 
   final RemoteSender _sender;
   final Duration flushInterval;

@@ -12,7 +12,8 @@ import 'home_layout_provider.dart';
 import 'widget_gallery.dart';
 
 /// Accueil : pages de 4 × 6 cases (glissement horizontal, jamais de défilement
-/// continu), mode édition façon écran d'accueil iOS.
+/// continu), mode édition façon écran d'accueil iOS : en glissant un widget,
+/// les autres se réorganisent en direct.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,8 +27,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
       AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
   bool _editing = false;
   int _page = 0;
+
+  /// Widget en cours de glisser, aperçu de la réorganisation, position du
+  /// doigt (repère de la grille) et point de prise dans le widget.
   String? _dragging;
+  HomeLayout? _preview;
+  Offset _finger = Offset.zero;
+  Offset _grab = Offset.zero;
   Timer? _edgeTimer;
+  final _gridKey = GlobalKey();
 
   @override
   void dispose() {
@@ -60,12 +68,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
     _goTo(page);
   }
 
+  Offset _toGrid(Offset global) {
+    final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    return box == null ? global : box.globalToLocal(global);
+  }
+
+  /// Appui long sur un widget en mode édition : début du glisser.
+  void _dragStart(Placement w, Offset global, GridMetrics grid) {
+    HapticFeedback.mediumImpact();
+    final local = _toGrid(global);
+    setState(() {
+      _dragging = w.id;
+      _preview = null;
+      _finger = local;
+      _grab = local - grid.rect(w.col, w.row, w.size).topLeft;
+    });
+  }
+
+  void _dragMove(Offset global, GridMetrics grid, int pageCount) {
+    final id = _dragging;
+    final layout = ref.read(homeLayoutProvider).value;
+    if (id == null || layout == null) return;
+    final local = _toGrid(global);
+    setState(() => _finger = local);
+
+    // Bord de l'écran : page voisine après un court instant.
+    final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    final width = box?.size.width ?? 0;
+    if (local.dx < 20) {
+      _edgeHover(-1, pageCount);
+    } else if (local.dx > width - 20) {
+      _edgeHover(1, pageCount);
+    } else {
+      _edgeLeave();
+    }
+
+    final size = layout.find(id)!.$1.size;
+    final cell = grid.cellAt(local - _grab, size);
+    final next = layout.dropAt(id, _page, cell.col, cell.row);
+    if (next.toJson().toString() != (_preview ?? layout).toJson().toString()) {
+      HapticFeedback.selectionClick();
+      setState(() => _preview = next);
+    }
+  }
+
+  Future<void> _dragEnd() async {
+    final preview = _preview;
+    _edgeLeave();
+    setState(() {
+      _dragging = null;
+      _preview = null;
+    });
+    if (preview != null) await ref.read(homeLayoutProvider.notifier).commit(preview);
+  }
+
   /// Glisser au bord de l'écran pendant un déplacement : page voisine.
   void _edgeHover(int direction, int pageCount) {
     if (_edgeTimer != null) return;
     _edgeTimer = Timer(const Duration(milliseconds: 550), () {
       _edgeTimer = null;
-      final target = (_page + direction).clamp(0, pageCount);
+      final target = (_page + direction).clamp(0, pageCount - 1);
       if (target != _page) _goTo(target);
     });
   }
@@ -77,13 +139,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final layout = ref.watch(homeLayoutProvider).value;
+    final saved = ref.watch(homeLayoutProvider).value;
+    final locked = ref.watch(homePagingLockProvider) > 0;
     final c = context.pegasus;
     final text = Theme.of(context).textTheme;
-    if (layout == null) return const SizedBox.shrink();
+    if (saved == null) return const SizedBox.shrink();
+    final layout = _preview ?? saved;
 
-    // En mode édition, une page vide en plus permet d'y glisser un widget.
-    final pageCount = layout.pageCount + (_editing && _dragging != null ? 1 : 0);
+    // Pendant un glisser, une page vide en plus permet d'en créer une.
+    final pageCount = layout.pageCount + (_dragging != null ? 1 : 0);
     final page = _page.clamp(0, max(pageCount - 1, 0));
 
     return Column(
@@ -121,30 +185,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
         const SizedBox(height: 8),
         Expanded(
           child: LayoutBuilder(builder: (context, box) {
-            final grid = _GridMetrics(box.biggest);
-            return Stack(
-              children: [
-                PageView.builder(
-                  key: const ValueKey('home-pages'),
-                  controller: _pages,
-                  itemCount: pageCount,
-                  onPageChanged: (p) => setState(() => _page = p),
-                  itemBuilder: (context, p) => _HomePage(
-                    page: p,
-                    placements: p < layout.pageCount ? layout.pages[p] : const [],
-                    layout: layout,
-                    grid: grid,
-                    editing: _editing,
-                    wiggle: _wiggle,
-                    onLongPress: () => _setEditing(true),
-                    onDragState: (id) => setState(() => _dragging = id),
+            final grid = GridMetrics(box.biggest);
+            final dragged = _dragging == null ? null : layout.find(_dragging!)?.$1;
+            return Listener(
+              key: _gridKey,
+              // Le glisser est suivi ici : il survit aux réorganisations et
+              // aux changements de page.
+              onPointerMove: _dragging == null ? null : (e) => _dragMove(e.position, grid, pageCount),
+              onPointerUp: _dragging == null ? null : (_) => _dragEnd(),
+              onPointerCancel: _dragging == null ? null : (_) => _dragEnd(),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  PageView.builder(
+                    key: const ValueKey('home-pages'),
+                    controller: _pages,
+                    // Doigt sur le trackpad ou widget en cours de glisser : pages figées.
+                    physics: locked || _dragging != null ? const NeverScrollableScrollPhysics() : null,
+                    itemCount: pageCount,
+                    onPageChanged: (p) => setState(() => _page = p),
+                    itemBuilder: (context, p) => _HomePage(
+                      placements: p < layout.pageCount ? layout.pages[p] : const [],
+                      grid: grid,
+                      editing: _editing,
+                      dragging: _dragging,
+                      wiggle: _wiggle,
+                      onLongPress: () => _setEditing(true),
+                      onDragStart: (w, global) => _dragStart(w, global, grid),
+                    ),
                   ),
-                ),
-                if (_editing && _dragging != null) ...[
-                  _EdgeZone(left: true, onHover: () => _edgeHover(-1, pageCount), onLeave: _edgeLeave),
-                  _EdgeZone(left: false, onHover: () => _edgeHover(1, pageCount), onLeave: _edgeLeave),
+                  if (dragged != null)
+                    Positioned.fromRect(
+                      rect: grid.rect(0, 0, dragged.size).shift(_finger - _grab - const Offset(GridMetrics.gap / 2, GridMetrics.gap / 2)),
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: 0.9,
+                          child: HomeTile(
+                            key: const ValueKey('drag-floating'),
+                            placement: dragged,
+                            module: moduleById(dragged.moduleId)!,
+                            editing: true,
+                            floating: true,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
-              ],
+              ),
             );
           }),
         ),
@@ -174,8 +261,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with SingleTickerProvid
 }
 
 /// Taille d'une case et conversions position ↔ case.
-class _GridMetrics {
-  _GridMetrics(Size area)
+class GridMetrics {
+  GridMetrics(Size area)
       : cellW = area.width / HomeLayout.cols,
         cellH = area.height / HomeLayout.rows;
 
@@ -196,152 +283,71 @@ class _GridMetrics {
       );
 }
 
-class _HomePage extends ConsumerStatefulWidget {
+class _HomePage extends StatelessWidget {
   const _HomePage({
-    required this.page,
     required this.placements,
-    required this.layout,
     required this.grid,
     required this.editing,
+    required this.dragging,
     required this.wiggle,
     required this.onLongPress,
-    required this.onDragState,
+    required this.onDragStart,
   });
 
-  final int page;
   final List<Placement> placements;
-  final HomeLayout layout;
-  final _GridMetrics grid;
+  final GridMetrics grid;
   final bool editing;
+  final String? dragging;
   final Animation<double> wiggle;
   final VoidCallback onLongPress;
-  final ValueChanged<String?> onDragState;
-
-  @override
-  ConsumerState<_HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends ConsumerState<_HomePage> {
-  /// Case visée pendant un glisser : (col, row, place libre ?).
-  (int, int, bool)? _hover;
+  final void Function(Placement w, Offset global) onDragStart;
 
   @override
   Widget build(BuildContext context) {
-    final grid = widget.grid;
     final c = context.pegasus;
-    final dragged = _hover == null ? null : widget.layout.find(_draggedId ?? '')?.$1;
-
-    final content = Stack(
+    return Stack(
       children: [
-        if (_hover != null && dragged != null)
-          Positioned.fromRect(
-            rect: grid.rect(_hover!.$1, _hover!.$2, dragged.size),
-            child: DecoratedBox(
-              key: const ValueKey('drop-preview'),
-              decoration: BoxDecoration(
-                color: (_hover!.$3 ? c.success : c.danger).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(PegasusRadii.card),
-                border: Border.all(color: _hover!.$3 ? c.success : c.danger),
-              ),
-            ),
-          ),
-        for (final w in widget.placements)
-          Positioned.fromRect(
+        for (final w in placements)
+          AnimatedPositioned.fromRect(
             key: ValueKey('tile-${w.id}'),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             rect: grid.rect(w.col, w.row, w.size),
-            child: _tile(w),
+            child: w.id == dragging
+                // Emplacement réservé au widget qu'on déplace.
+                ? DecoratedBox(
+                    key: const ValueKey('drop-preview'),
+                    decoration: BoxDecoration(
+                      color: c.accent2.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(PegasusRadii.card),
+                      border: Border.all(color: c.accent2),
+                    ),
+                  )
+                : _tile(w),
           ),
       ],
     );
-
-    if (!widget.editing) return content;
-    return DragTarget<String>(
-      onMove: (d) => _updateHover(d.data, d.offset),
-      onLeave: (_) => setState(() => _hover = null),
-      onAcceptWithDetails: (d) async {
-        final hover = _hover;
-        setState(() => _hover = null);
-        if (hover != null && hover.$3) {
-          HapticFeedback.selectionClick();
-          await ref.read(homeLayoutProvider.notifier).move(d.data, widget.page, hover.$1, hover.$2);
-        }
-      },
-      builder: (context, _, _) => content,
-    );
-  }
-
-  String? _draggedId;
-
-  void _updateHover(String id, Offset globalTopLeft) {
-    final box = context.findRenderObject() as RenderBox?;
-    final found = widget.layout.find(id);
-    if (box == null || found == null) return;
-    _draggedId = id;
-    final local = box.globalToLocal(globalTopLeft);
-    final cell = widget.grid.cellAt(local, found.$1.size);
-    final ok = widget.layout.fits(widget.page, found.$1.size, cell.col, cell.row, ignoreId: id);
-    final next = (cell.col, cell.row, ok);
-    if (next != _hover) setState(() => _hover = next);
   }
 
   Widget _tile(Placement w) {
     final module = moduleById(w.moduleId);
     if (module == null) return const SizedBox.shrink();
-    final tile = HomeTile(placement: w, module: module, editing: widget.editing);
-    if (!widget.editing) {
-      return GestureDetector(onLongPress: widget.onLongPress, child: tile);
+    final tile = HomeTile(placement: w, module: module, editing: editing);
+    if (!editing) {
+      return GestureDetector(onLongPress: onLongPress, child: tile);
     }
-    final rect = widget.grid.rect(w.col, w.row, w.size);
-    final wiggling = AnimatedBuilder(
-      animation: widget.wiggle,
-      builder: (context, child) => Transform.rotate(
-        angle: (widget.wiggle.value - 0.5) * 0.03 * (w.id.hashCode.isEven ? 1 : -1),
-        child: child,
+    return GestureDetector(
+      onLongPressStart: (d) => onDragStart(w, d.globalPosition),
+      child: AnimatedBuilder(
+        animation: wiggle,
+        builder: (context, child) => Transform.rotate(
+          angle: (wiggle.value - 0.5) * 0.03 * (w.id.hashCode.isEven ? 1 : -1),
+          child: child,
+        ),
+        child: tile,
       ),
-      child: tile,
-    );
-    return LongPressDraggable<String>(
-      data: w.id,
-      onDragStarted: () {
-        HapticFeedback.mediumImpact();
-        widget.onDragState(w.id);
-      },
-      onDragEnd: (_) => widget.onDragState(null),
-      feedback: SizedBox(
-        width: rect.width,
-        height: rect.height,
-        child: Opacity(opacity: 0.85, child: HomeTile(placement: w, module: module, editing: true, floating: true)),
-      ),
-      childWhenDragging: const SizedBox.shrink(),
-      child: wiggling,
     );
   }
-}
-
-class _EdgeZone extends StatelessWidget {
-  const _EdgeZone({required this.left, required this.onHover, required this.onLeave});
-  final bool left;
-  final VoidCallback onHover;
-  final VoidCallback onLeave;
-
-  @override
-  Widget build(BuildContext context) => Positioned(
-        left: left ? 0 : null,
-        right: left ? null : 0,
-        top: 0,
-        bottom: 0,
-        width: 22,
-        child: DragTarget<String>(
-          key: ValueKey(left ? 'edge-left' : 'edge-right'),
-          onWillAcceptWithDetails: (_) {
-            onHover();
-            return false;
-          },
-          onMove: (_) => onHover(),
-          onLeave: (_) => onLeave(),
-          builder: (context, _, _) => const SizedBox.expand(),
-        ),
-      );
 }
 
 /// Un widget de l'accueil.
@@ -395,7 +401,7 @@ class HomeTile extends ConsumerWidget {
         children: [
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+              padding: const EdgeInsets.all(6),
               child: IgnorePointer(ignoring: editing, child: module.widget!(context, placement.size)),
             ),
           ),

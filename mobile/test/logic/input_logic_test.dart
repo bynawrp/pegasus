@@ -47,7 +47,7 @@ void main() {
     late TrackpadEngine e;
     setUp(() {
       sink = _Sink();
-      e = TrackpadEngine(sink, settings: const TrackpadSettings(sensitivity: 2, pixelsPerNotch: 20));
+      e = TrackpadEngine(sink, settings: const TrackpadSettings(sensitivity: 2, acceleration: 0, pixelsPerNotch: 20));
     });
 
     test('1 doigt qui glisse → déplacement × sensibilité, pas de clic', () {
@@ -57,6 +57,30 @@ void main() {
       e.up(1, ms(400));
       expect((sink.mx, sink.my), (60.0, -10.0));
       expect(sink.log, isEmpty);
+    });
+
+    test('accélération : un geste rapide va plus loin qu’un lent, à distance égale', () {
+      double travel(Duration step) {
+        final s = _Sink();
+        final eng = TrackpadEngine(s, settings: const TrackpadSettings(sensitivity: 2, acceleration: 1.5));
+        eng.down(1, Offset.zero, Duration.zero);
+        for (var i = 1; i <= 10; i++) {
+          eng.move(1, Offset(i * 10.0, 0), step * i);
+        }
+        return s.mx;
+      }
+
+      final slow = travel(const Duration(milliseconds: 100)); // 0,1 px/ms
+      final fast = travel(const Duration(milliseconds: 5)); // 2 px/ms
+      expect(slow, closeTo(200, 1e-6), reason: 'lent = gain de base, précis');
+      expect(fast, closeTo(500, 1e-6), reason: 'rapide = × (1 + 1,5)');
+    });
+
+    test('gain : progressif entre lent et rapide', () {
+      const s = TrackpadSettings(sensitivity: 2, acceleration: 1.5);
+      expect(s.gain(0.1), 2);
+      expect(s.gain(0.875), closeTo(3.5, 1e-9));
+      expect(s.gain(5), 5);
     });
 
     test('tap → clic gauche', () {
@@ -150,7 +174,7 @@ void main() {
           s.move(1.234, -0.5);
         }
         expect(sender.log, isEmpty);
-        async.elapse(const Duration(milliseconds: 20));
+        async.elapse(const Duration(milliseconds: 15));
         expect(sender.log, ['input.move {dx: 12.34, dy: -5.0}']);
         async.elapse(const Duration(milliseconds: 100));
         expect(sender.log, hasLength(1));

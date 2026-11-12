@@ -6,10 +6,12 @@ import 'package:pegasus_protocol/pegasus_protocol.dart';
 import 'package:pegasus_ui/pegasus_ui.dart';
 
 import '../../home/home_layout.dart';
+import '../../home/home_layout_provider.dart';
 import '../input/input_service.dart';
 import '../module_gate.dart';
 import '../registry.dart';
 import 'trackpad_engine.dart';
+import 'trackpad_settings.dart';
 
 final trackpadModule = PegasusModule(
   id: 'trackpad',
@@ -62,33 +64,60 @@ class TrackpadPad extends ConsumerStatefulWidget {
 class _TrackpadPadState extends ConsumerState<TrackpadPad> {
   late final TrackpadEngine _engine;
   late final InputService _input;
+  late final HomePagingLock _lock;
+  int _held = 0;
 
   @override
   void initState() {
     super.initState();
     _input = ref.read(inputServiceProvider);
-    _engine = TrackpadEngine(_ServiceSink(_input));
+    _lock = ref.read(homePagingLockProvider.notifier);
+    _engine = TrackpadEngine(_ServiceSink(_input), settings: trackpadSettingsFor(ref.read(trackpadSpeedProvider)));
   }
 
   @override
   void dispose() {
     _engine.cancel();
+    // Libère l'accueil si le widget disparaît doigt posé.
+    for (; _held > 0; _held--) {
+      _lock.release();
+    }
     super.dispose();
+  }
+
+  void _hold() {
+    _held++;
+    _lock.hold();
+  }
+
+  void _release() {
+    if (_held == 0) return;
+    _held--;
+    _lock.release();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.pegasus;
-    final input = _input;
+    ref.listen(trackpadSpeedProvider, (_, speed) => _engine.settings = trackpadSettingsFor(speed));
     final surface = Listener(
       key: const ValueKey('trackpad-surface'),
       behavior: HitTestBehavior.opaque,
-      onPointerDown: (e) => _engine.down(e.pointer, e.localPosition, e.timeStamp),
+      onPointerDown: (e) {
+        _hold();
+        _engine.down(e.pointer, e.localPosition, e.timeStamp);
+      },
       onPointerMove: (e) => _engine.move(e.pointer, e.localPosition, e.timeStamp),
-      onPointerUp: (e) => _engine.up(e.pointer, e.timeStamp),
-      onPointerCancel: (_) => _engine.cancel(),
+      onPointerUp: (e) {
+        _release();
+        _engine.up(e.pointer, e.timeStamp);
+      },
+      onPointerCancel: (_) {
+        _release();
+        _engine.cancel();
+      },
       child: RawGestureDetector(
-        // Empêche le défilement des pages de l'accueil de voler les gestes.
+        // Garde les gestes dans le trackpad (en plus du verrou des pages).
         gestures: {
           _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(_EagerPan.new, (_) {}),
         },
@@ -121,18 +150,18 @@ class _TrackpadPadState extends ConsumerState<TrackpadPad> {
                   Expanded(
                     child: _MouseButton(
                       key: const ValueKey('trackpad-left'),
-                      label: 'Gauche',
-                      onDown: () => input.button(MouseButton.left, down: true),
-                      onUp: () => input.button(MouseButton.left, down: false),
+                      left: true,
+                      onDown: () => _input.button(MouseButton.left, down: true),
+                      onUp: () => _input.button(MouseButton.left, down: false),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _MouseButton(
                       key: const ValueKey('trackpad-right'),
-                      label: 'Droit',
-                      onDown: () => input.button(MouseButton.right, down: true),
-                      onUp: () => input.button(MouseButton.right, down: false),
+                      left: false,
+                      onDown: () => _input.button(MouseButton.right, down: true),
+                      onUp: () => _input.button(MouseButton.right, down: false),
                     ),
                   ),
                 ],
@@ -147,8 +176,8 @@ class _TrackpadPadState extends ConsumerState<TrackpadPad> {
 
 /// Bouton physique : appui = bouton enfoncé (permet le glisser-déposer).
 class _MouseButton extends StatefulWidget {
-  const _MouseButton({super.key, required this.label, required this.onDown, required this.onUp});
-  final String label;
+  const _MouseButton({super.key, required this.left, required this.onDown, required this.onUp});
+  final bool left;
   final VoidCallback onDown;
   final VoidCallback onUp;
 
@@ -185,10 +214,45 @@ class _MouseButtonState extends State<_MouseButton> {
           borderRadius: BorderRadius.circular(PegasusRadii.control),
           border: Border.all(color: _pressed ? c.accent : c.line),
         ),
-        child: Text(widget.label, maxLines: 1, style: Theme.of(context).textTheme.labelLarge),
+        child: Semantics(
+          label: widget.left ? 'Clic gauche' : 'Clic droit',
+          button: true,
+          child: CustomPaint(
+            size: const Size(20, 28),
+            painter: MouseClickIcon(left: widget.left, outline: c.text, fill: _pressed ? c.accent : c.accent2),
+          ),
+        ),
       ),
     );
   }
+}
+
+/// Icône de souris avec le bouton gauche (ou droit) en surbrillance.
+class MouseClickIcon extends CustomPainter {
+  const MouseClickIcon({required this.left, required this.outline, required this.fill});
+  final bool left;
+  final Color outline;
+  final Color fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(size.width / 2));
+    final split = size.height * 0.42;
+    canvas.save();
+    canvas.clipRRect(body);
+    canvas.drawRect(Rect.fromLTWH(left ? 0 : size.width / 2, 0, size.width / 2, split), Paint()..color = fill);
+    canvas.restore();
+    final stroke = Paint()
+      ..color = outline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8;
+    canvas.drawRRect(body, stroke);
+    canvas.drawLine(Offset(0, split), Offset(size.width, split), stroke);
+    canvas.drawLine(Offset(size.width / 2, 0), Offset(size.width / 2, split), stroke);
+  }
+
+  @override
+  bool shouldRepaint(MouseClickIcon old) => old.left != left || old.outline != outline || old.fill != fill;
 }
 
 /// Reconnaît tout de suite un glissement pour garder les gestes dans le trackpad.
@@ -202,12 +266,14 @@ class _EagerPan extends PanGestureRecognizer {
   }
 }
 
-/// Écran plein du trackpad.
-class TrackpadScreen extends StatelessWidget {
+/// Écran plein du trackpad, avec le réglage de vitesse.
+class TrackpadScreen extends ConsumerWidget {
   const TrackpadScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final speed = ref.watch(trackpadSpeedProvider);
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('TRACKPAD')),
       body: SafeArea(
@@ -221,9 +287,30 @@ class TrackpadScreen extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: text.bodySmall,
               ),
-              const SizedBox(height: 8),
+              SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    Text('Vitesse', maxLines: 1, style: text.labelLarge),
+                    Expanded(
+                      child: Slider(
+                        key: const ValueKey('trackpad-speed'),
+                        min: TrackpadSpeed.min,
+                        max: TrackpadSpeed.max,
+                        divisions: 8,
+                        value: speed,
+                        onChanged: (v) => ref.read(trackpadSpeedProvider.notifier).set(v),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Text('× ${speed.toStringAsFixed(2)}', maxLines: 1, style: text.labelMedium),
+                    ),
+                  ],
+                ),
+              ),
               const Expanded(child: TrackpadPad()),
             ],
           ),

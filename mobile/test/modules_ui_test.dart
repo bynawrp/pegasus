@@ -182,25 +182,56 @@ void main() {
       expectCleanLayout(tester);
     });
 
-    testWidgets('glisser-déposer un widget sur une case libre', (tester) async {
-      final (_, c) = await _pump(tester);
-      await tester.tap(find.byKey(const ValueKey('home-edit')));
-      await tester.pump();
-      await c.read(homeLayoutProvider.notifier).remove(_layout(c).all.first.id); // libère le haut
-      await tester.pump();
-      final kb = _layout(c).all.single;
-      expect(kb.row, 4);
-      final from = tester.getCenter(find.byKey(ValueKey('tile-${kb.id}')));
-      final pages = tester.getRect(find.byKey(const ValueKey('home-pages')));
-      final gesture = await tester.startGesture(from);
+    Future<void> dragTile(WidgetTester tester, String id, Offset by) async {
+      final gesture = await tester.startGesture(tester.getCenter(find.byKey(ValueKey('tile-$id'))));
       await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
-      // Remonte le widget de 4 rangées.
-      await gesture.moveBy(Offset(0, -(pages.height / 6) * 4));
-      await tester.pump();
+      expect(find.byKey(const ValueKey('drag-floating')), findsOneWidget);
+      for (var i = 1; i <= 8; i++) {
+        await gesture.moveBy(by / 8);
+        await tester.pump(const Duration(milliseconds: 16));
+      }
       expect(find.byKey(const ValueKey('drop-preview')), findsOneWidget);
       await gesture.up();
       await _settle(tester);
-      expect(_layout(c).all.single.row, 0);
+    }
+
+    testWidgets('façon iOS : déposer le clavier sur le trackpad le pousse dessous', (tester) async {
+      final (_, c) = await _pump(tester);
+      final tp = _layout(c).all.first.id;
+      final kb = _layout(c).all.last.id;
+      await tester.tap(find.byKey(const ValueKey('home-edit')));
+      await tester.pump();
+      final pages = tester.getRect(find.byKey(const ValueKey('home-pages')));
+      // Le clavier (rangées 4-5) remonte tout en haut, sur le trackpad.
+      await dragTile(tester, kb, Offset(0, -(pages.height / 6) * 4));
+      final l = _layout(c);
+      expect(l.pages[0].map((w) => w.id).toList(), [kb, tp]);
+      expect(l.find(kb)!.$1.row, 0);
+      expect(l.find(tp)!.$1.row, 2);
+      expectCleanLayout(tester);
+    });
+
+    testWidgets('aperçu en direct : les autres widgets se déplacent pendant le glisser', (tester) async {
+      final (_, c) = await _pump(tester);
+      final tp = _layout(c).all.first.id;
+      final kb = _layout(c).all.last.id;
+      await tester.tap(find.byKey(const ValueKey('home-edit')));
+      await tester.pump();
+      final pages = tester.getRect(find.byKey(const ValueKey('home-pages')));
+      final before = tester.getRect(find.byKey(ValueKey('tile-$tp'))).top;
+      final gesture = await tester.startGesture(tester.getCenter(find.byKey(ValueKey('tile-$kb'))));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
+      for (var i = 0; i < 8; i++) {
+        await gesture.moveBy(Offset(0, -(pages.height / 6) * 4 / 8));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await _settle(tester);
+      // Doigt toujours posé : le trackpad est déjà descendu, rien n'est encore enregistré.
+      expect(tester.getRect(find.byKey(ValueKey('tile-$tp'))).top, greaterThan(before + 10));
+      expect(_layout(c).pages[0].first.id, tp);
+      await gesture.up();
+      await _settle(tester);
+      expect(_layout(c).pages[0].first.id, kb);
     });
 
     testWidgets('mise en page conservée entre deux lancements', (tester) async {
@@ -210,6 +241,29 @@ void main() {
       final saved = HomeLayout.fromJson(jsonDecode(prefs.getString('home.layout')!), knownModule: (_) => true);
       expect(saved.all, hasLength(3));
     });
+  });
+
+  testWidgets('glisser sur le trackpad de l’accueil ne change pas de page', (tester) async {
+    final (sender, c) = await _pump(tester);
+    await c.read(homeLayoutProvider.notifier).add('keyboard', WidgetSize.small); // crée la page 2
+    await tester.pump();
+    expect(_layout(c).pageCount, 2);
+    final surface = find.byKey(const ValueKey('trackpad-surface'));
+    final g = await tester.startGesture(tester.getCenter(surface));
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(-30, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.widget<PageView>(find.byKey(const ValueKey('home-pages'))).controller!.page, 0);
+    expect(sender.log.where((l) => l.startsWith('input.move')), isNotEmpty);
+    // Hors du trackpad (sur le widget clavier), le glissement change bien de page.
+    await tester.flingFrom(tester.getCenter(find.byType(KeyboardShortcutsPad)), const Offset(-300, 0), 1500);
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(tester.widget<PageView>(find.byKey(const ValueKey('home-pages'))).controller!.page, 1);
   });
 
   group('Catalogue des modules', () {
@@ -277,6 +331,17 @@ void main() {
         'input.button {"button":"left","state":"down"}',
         'input.button {"button":"left","state":"up"}',
       ]);
+    });
+
+    testWidgets('boutons en icônes de souris, réglage de vitesse conservé', (tester) async {
+      await _pump(tester, home: const TrackpadScreen());
+      expect(find.text('Gauche'), findsNothing);
+      expect(find.bySemanticsLabel('Clic gauche'), findsOneWidget);
+      expect(find.bySemanticsLabel('Clic droit'), findsOneWidget);
+      await tester.drag(find.byKey(const ValueKey('trackpad-speed')), const Offset(200, 0));
+      await tester.pump();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getDouble('trackpad.speed'), greaterThan(1.0));
     });
 
     for (final MapEntry(key: name, value: link) in {
