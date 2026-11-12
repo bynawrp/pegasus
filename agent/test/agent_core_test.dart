@@ -8,6 +8,7 @@ import 'package:pegasus_agent/src/core/agent_controller.dart';
 import 'package:pegasus_agent/src/core/agent_store.dart';
 import 'package:pegasus_agent/src/core/secret_protector.dart';
 import 'package:pegasus_agent/src/platform/input_controller.dart';
+import 'package:pegasus_agent/src/platform/system_controller.dart';
 import 'package:pegasus_link/pegasus_link.dart';
 import 'package:pegasus_protocol/pegasus_protocol.dart';
 
@@ -100,6 +101,7 @@ void main() {
       final c = ProviderContainer(overrides: [
         agentDirectoryProvider.overrideWith((ref) async => directory ?? dir),
         inputControllerProvider.overrideWithValue(RecordingInputController()),
+        systemControllerProvider.overrideWithValue(RecordingSystemController()),
         agentServerConfigProvider.overrideWithValue(
           AgentServerConfig(port: port, address: InternetAddress.loopbackIPv4),
         ),

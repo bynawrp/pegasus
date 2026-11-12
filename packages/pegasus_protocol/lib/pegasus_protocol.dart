@@ -3,6 +3,7 @@
 /// Spécification : `docs/protocol.md`.
 library;
 
+export 'src/actions.dart';
 export 'src/close_codes.dart';
 export 'src/envelope.dart';
 export 'src/error_code.dart';

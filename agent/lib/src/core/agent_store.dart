@@ -3,13 +3,18 @@ import 'dart:io';
 
 import 'package:pegasus_link/pegasus_link.dart';
 
+import '../modules/apps/app_catalog.dart';
+
 import 'secret_protector.dart';
 
 /// Données persistées de l'agent.
 class AgentData {
-  const AgentData({required this.identity, required this.devices});
+  const AgentData({required this.identity, required this.devices, this.favorites = const []});
   final AgentIdentity identity;
   final List<PairedDevice> devices;
+
+  /// Applications favorites proposées dans l'app (pas de secret).
+  final List<Favorite> favorites;
 }
 
 /// Lecture / écriture de `agent.json` ; les secrets sont chiffrés (DPAPI).
@@ -39,7 +44,11 @@ class AgentStore {
               return PairedDevice.fromJson({...d, 'secret': protector.unprotect(d['secret'] as String)});
             }(),
         ];
-        return AgentData(identity: identity, devices: devices);
+        final favorites = [
+          for (final raw in (json['favorites'] as List? ?? const []))
+            ?Favorite.fromJson(raw),
+        ];
+        return AgentData(identity: identity, devices: devices, favorites: favorites);
       } catch (_) {
         // Fichier corrompu ou illisible (autre session Windows) : on le
         // met de côté et on repart d'une identité neuve.
@@ -62,6 +71,7 @@ class AgentStore {
       'devices': [
         for (final d in data.devices) {...d.toJson(), 'secret': protector.protect(d.secret)},
       ],
+      'favorites': [for (final f in data.favorites) f.toJson()],
     };
     final tmp = File('${file.path}.tmp');
     await tmp.writeAsString(const JsonEncoder.withIndent('  ').convert(json), flush: true);

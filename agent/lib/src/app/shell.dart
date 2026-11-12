@@ -4,11 +4,13 @@ import 'package:pegasus_ui/pegasus_ui.dart';
 
 import '../core/agent_controller.dart';
 import '../devices/devices_screen.dart';
+import '../favorites/favorites_screen.dart';
 import '../home/home_screen.dart';
 
 enum AgentSection {
   home('Accueil', Icons.space_dashboard_outlined),
-  devices('Appareils', Icons.smartphone_outlined);
+  devices('Appareils', Icons.smartphone_outlined),
+  favorites('Favoris', Icons.apps_rounded);
 
   const AgentSection(this.label, this.icon);
   final String label;
@@ -40,6 +42,7 @@ class AgentShell extends ConsumerWidget {
               child: switch (section) {
                 AgentSection.home => const HomeScreen(),
                 AgentSection.devices => const DevicesScreen(),
+                AgentSection.favorites => const FavoritesScreen(),
               },
             ),
           ),

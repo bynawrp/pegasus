@@ -6,11 +6,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pegasus_link/pegasus_link.dart';
 import 'package:pegasus_protocol/pegasus_protocol.dart';
 
+import '../modules/apps/app_catalog.dart';
 import '../modules/input/input_module.dart';
+import '../modules/system/system_modules.dart';
 import '../platform/input_controller.dart';
+import '../platform/system_controller.dart';
 import 'agent_store.dart';
 
-const agentVersion = '0.1.0';
+const agentVersion = '0.3.0';
 
 enum AgentStatus { starting, running, error }
 
@@ -38,6 +41,7 @@ class AgentViewState {
     this.devices = const [],
     this.connected = const {},
     this.activity = const [],
+    this.favorites = const [],
   });
 
   final AgentStatus status;
@@ -59,6 +63,9 @@ class AgentViewState {
 
   /// Plus récent en premier.
   final List<ActivityEntry> activity;
+
+  /// Applications favorites proposées dans l'app.
+  final List<Favorite> favorites;
 
   String? get primaryAddress => addresses.isEmpty ? null : addresses.first;
 
@@ -92,6 +99,7 @@ class AgentViewState {
     List<PairedDevice>? devices,
     Set<String>? connected,
     List<ActivityEntry>? activity,
+    List<Favorite>? favorites,
   }) =>
       AgentViewState(
         status: status ?? this.status,
@@ -107,6 +115,7 @@ class AgentViewState {
         devices: devices ?? this.devices,
         connected: connected ?? this.connected,
         activity: activity ?? this.activity,
+        favorites: favorites ?? this.favorites,
       );
 }
 
@@ -115,6 +124,15 @@ final agentDirectoryProvider = FutureProvider<Directory>((ref) => getApplication
 
 /// Souris / clavier du PC (remplacé par un enregistreur dans les tests).
 final inputControllerProvider = Provider<InputController?>((ref) => InputController.platform());
+
+/// Son, alimentation, applications et liens (remplacé par un enregistreur dans les tests).
+final systemControllerProvider = Provider<SystemController?>((ref) => SystemController.platform());
+
+/// Applications du menu Démarrer (remplacé dans les tests).
+final startMenuScannerProvider = Provider<StartMenuScanner>((ref) => StartMenuScanner());
+
+/// Extraction d'icônes (remplacé dans les tests).
+final iconExtractorProvider = Provider<IconExtractor>((ref) => const IconExtractor());
 
 /// Configuration réseau du serveur (remplaçable dans les tests).
 final agentServerConfigProvider = Provider<AgentServerConfig>(
@@ -130,6 +148,7 @@ class AgentController extends Notifier<AgentViewState> {
   AgentStore? _store;
   StreamSubscription<AgentServerEvent>? _events;
   StreamSubscription<PairingSecret?>? _pairingChanges;
+  AudioWatcher? _audioWatcher;
   final _names = <String, String>{};
   Future<void> _saving = Future.value();
   bool _disposed = false;
@@ -142,6 +161,7 @@ class AgentController extends Notifier<AgentViewState> {
       _disposed = true;
       _events?.cancel();
       _pairingChanges?.cancel();
+      _audioWatcher?.stop();
       _server?.dispose();
     });
     Future.microtask(_start);
@@ -171,6 +191,17 @@ class AgentController extends Notifier<AgentViewState> {
       } else {
         server.setModule('input', false);
       }
+      final system = ref.read(systemControllerProvider);
+      if (system != null) {
+        registerMediaModule(server, system);
+        registerPowerModule(server, system);
+        registerAppsModule(server, system, () => state.favorites);
+        _audioWatcher = AudioWatcher(server, system)..start();
+      } else {
+        for (final m in const ['media', 'power', 'apps']) {
+          server.setModule(m, false);
+        }
+      }
       _events = server.events.listen(_onEvent);
       _pairingChanges = server.pairing.changes.listen(_onPairingChanged);
       state = state.copyWith(
@@ -178,6 +209,7 @@ class AgentController extends Notifier<AgentViewState> {
         agentId: data.identity.agentId,
         fingerprint: data.identity.fingerprint,
         devices: server.devices,
+        favorites: data.favorites,
       );
       await server.start();
       final addresses = await localIPv4Addresses();
@@ -223,6 +255,38 @@ class AgentController extends Notifier<AgentViewState> {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
     _server?.renameDevice(deviceId, trimmed.length > 64 ? trimmed.substring(0, 64) : trimmed);
+  }
+
+  /// Applications du menu Démarrer, pour choisir les favoris.
+  Future<List<InstalledApp>> installedApps() => ref.read(startMenuScannerProvider).scan();
+
+  /// Ajoute un favori (icône extraite au passage).
+  Future<void> addFavorite(InstalledApp app) async {
+    if (state.favorites.any((f) => f.id == app.id)) return;
+    final icon = await ref.read(iconExtractorProvider).extract(app.path);
+    if (_disposed || state.favorites.any((f) => f.id == app.id)) return;
+    state = state.copyWith(favorites: [...state.favorites, Favorite(id: app.id, name: app.name, path: app.path, icon: icon)]);
+    _addActivity('Favori ajouté : ${app.name}');
+    _persist();
+  }
+
+  void removeFavorite(String id) {
+    final removed = state.favorites.where((f) => f.id == id).firstOrNull;
+    if (removed == null) return;
+    state = state.copyWith(favorites: [for (final f in state.favorites) if (f.id != id) f]);
+    _addActivity('Favori retiré : ${removed.name}');
+    _persist();
+  }
+
+  /// Change l'ordre d'un favori (tel qu'affiché dans l'app).
+  void moveFavorite(String id, int delta) {
+    final list = [...state.favorites];
+    final i = list.indexWhere((f) => f.id == id);
+    final j = i + delta;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    list.insert(j, list.removeAt(i));
+    state = state.copyWith(favorites: list);
+    _persist();
   }
 
   /// Rafraîchit les adresses réseau (changement de Wi-Fi).
@@ -282,7 +346,7 @@ class AgentController extends Notifier<AgentViewState> {
     return _saving = _saving.then((_) async {
       if (_disposed) return;
       try {
-        await store.save(AgentData(identity: server.identity, devices: server.devices));
+        await store.save(AgentData(identity: server.identity, devices: server.devices, favorites: state.favorites));
       } catch (_) {
         // Disque indisponible : la prochaine modification retentera.
       }
